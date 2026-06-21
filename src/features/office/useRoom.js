@@ -3,6 +3,7 @@ import { drawPlayers, ROOM_SCENE } from "./canvas/room.js";
 import { nextCell } from "./movement.js";
 import { PROXIMITY, doorAt, SPAWN } from "./constants.js";
 import { createVideoController } from "../video/videoController.js";
+import { getToken } from "../auth/token.js";
 
 // หัวใจของ Office: เปิด WebSocket ครั้งเดียวตอน mount แล้วประสานทุกอย่าง —
 // ผู้เล่น/การเดิน, แชต, render loop ของ canvas, และสายวิดีโอ proximity (ผ่าน videoController)
@@ -35,7 +36,12 @@ export function useRoom({ room: initialRoom, displayName }) {
     setStatus("กำลังเชื่อมต่อ ...");
     /* eslint-enable react-hooks/set-state-in-effect */
 
-    const ws = new WebSocket(`ws://${location.host}/ws?room=${encodeURIComponent(room)}`);
+    // เบราว์เซอร์ตั้ง custom header บน WS handshake ไม่ได้ → ส่ง JWT ผ่าน query string แทน
+    const token = getToken();
+    const ws = new WebSocket(
+      `ws://${location.host}/ws?room=${encodeURIComponent(room)}` +
+        (token ? `&token=${encodeURIComponent(token)}` : "")
+    );
     wsRef.current = ws;
     const send = (type, payload) => ws.readyState === 1 && ws.send(JSON.stringify({ type, payload }));
 

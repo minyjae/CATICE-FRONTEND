@@ -2,14 +2,14 @@
 // เก็บใน localStorage ให้รอด reload + cache ใน memory เพื่ออ่านเร็ว ๆ ระหว่าง render/WS
 const KEY = "catice_token";
 
-let token = localStorage.getItem(KEY) || null;
+let token: string | null = localStorage.getItem(KEY) || null;
 
-export const getToken = () => token;
+export const getToken = (): string | null => token;
 
-export function setToken(t) {
+export function setToken(t: string | null): void {
   token = t || null;
   if (token) localStorage.setItem(KEY, token);
   else localStorage.removeItem(KEY);
 }
 
-export const clearToken = () => setToken(null);
+export const clearToken = (): void => setToken(null);

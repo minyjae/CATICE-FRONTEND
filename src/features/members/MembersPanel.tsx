@@ -1,9 +1,15 @@
-import { colorFor } from "../../shared/colors.js";
-import { ROLE_LABEL } from "../auth/roles.js";
+import { colorFor } from "../../shared/colors";
+import { ROLE_LABEL } from "../auth/roles";
+import type { PublicUser } from "../../shared/protocol";
+
+interface MembersPanelProps {
+  users: PublicUser[];
+  myId: string | null;
+}
 
 // รายชื่อสมาชิกทั้งหมดที่สมัครเข้าระบบ — ดึงมาจาก handler /users (ส่งเข้ามาเป็น prop users)
 // presentational ล้วน ๆ: แสดง avatar (สีคงที่ตาม id) + ชื่อ + ตำแหน่ง, ไฮไลต์ "ฉัน"
-export default function MembersPanel({ users, myId }) {
+export default function MembersPanel({ users, myId }: MembersPanelProps) {
   return (
     <div className="panel members">
       <div className="members-head">
@@ -17,7 +23,8 @@ export default function MembersPanel({ users, myId }) {
               {(u.name[0] || "?").toUpperCase()}
             </span>
             <span className="member-name">
-              {u.name}{u.id === myId ? " (ฉัน)" : ""}
+              {u.name}
+              {u.id === myId ? " (ฉัน)" : ""}
             </span>
             <span className="member-role">{ROLE_LABEL[u.role] || u.role}</span>
           </div>

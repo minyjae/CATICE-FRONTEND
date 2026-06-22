@@ -6,7 +6,7 @@
 
 // ----- entity -----
 
-export type RoomName = "lobby" | "meeting_room" | "office";
+export type RoomName = "lobby" | "meeting_room" | "office" | "canteen";
 
 export type Role = "developer" | "pm" | "po" | "cto" | "uxui";
 

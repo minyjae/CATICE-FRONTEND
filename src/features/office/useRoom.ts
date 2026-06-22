@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { drawPlayers, ROOM_SCENE } from "./canvas/room";
 import { nextCell } from "./movement";
-import { PROXIMITY, doorAt } from "./constants";
+import { PROXIMITY, doorAt, blockedAt } from "./constants";
 import type { Cell } from "./constants";
 import { createVideoController } from "../video/videoController";
 import type { VideoTile } from "../video/videoController";
@@ -176,6 +176,11 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
       if (door) {
         switchRoom(door.to, door.spawn);
 
+        return;
+      }
+
+      // ชนเฟอร์นิเจอร์/วัตถุ → ไม่ขยับ (เหมือนผนัง)
+      if (blockedAt(roomRef.current, cell.x, cell.y)) {
         return;
       }
 

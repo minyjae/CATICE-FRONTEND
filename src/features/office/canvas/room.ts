@@ -58,6 +58,13 @@ export function drawRoom(ctx: Ctx, W: number, H: number) {
   ctx.textAlign = "center";
   ctx.fillText("CATICE OFFICE", W / 2, 34);
 
+  // ประตูบนซ้าย → Canteen (เปิดช่องบนผนังบน คอลัมน์ 1–2 ตรงกับ DOORS.lobby)
+  box(ctx, CELL, 0, CELL * 2, WALL, "#3d2613", "#221208");
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 11px Inter";
+  ctx.textAlign = "center";
+  ctx.fillText("↑ Canteen", CELL * 2, 40);
+
   // =========================
   // COFFEE BAR
   // =========================
@@ -70,42 +77,21 @@ export function drawRoom(ctx: Ctx, W: number, H: number) {
   }
 
   // =========================
-  // SPRINT BOARD
+  // SPRINT BOARD (ติดบนผนังบน — x เดิม 540, บีบให้พอดีความสูงผนัง)
   // =========================
-  box(ctx, 540, 80, 160, 130, "#f4f4f4", "#cccccc");
+  box(ctx, 540, 6, 160, 52, "#f4f4f4", "#cccccc");
 
   ctx.fillStyle = "#222";
-  ctx.font = "700 14px Inter";
-  ctx.fillText("Sprint Board", 620, 105);
+  ctx.font = "700 12px Inter";
+  ctx.textAlign = "center";
+  ctx.fillText("Sprint Board", 620, 20);
 
   const cards = ["#d2b04d", "#699867", "#4674a4", "#a36a55", "#8d6598"];
 
   cards.forEach((c, i) => {
     ctx.fillStyle = c;
-
-    const row = i < 3 ? 0 : 1;
-    const col = i < 3 ? i : i - 3;
-
-    ctx.fillRect(555 + col * 45, 120 + row * 42, 30, 30);
+    ctx.fillRect(552 + i * 28, 32, 20, 20); // แถวเดียว 5 ใบ ภายในบอร์ด (540–700)
   });
-
-  // =========================
-  // MEETING ZONE
-  // =========================
-  ctx.fillStyle = "#254b80";
-  ctx.fillRect(70, 230 - 80, 130, 90);
-
-  ctx.fillStyle = "#183660";
-  ctx.fillRect(70, 314 - 80, 130, 36);
-
-  box(ctx, 98, 270 - 90, 72, 62, "#6a3f1f", "#4d2b15");
-
-  // =========================
-  // LOUNGE
-  // =========================
-  box(ctx, 280, 240, 180, 120, "#a8adb3", "#7f8790");
-
-  box(ctx, 315, 276, 110, 36, "#6a3f1f", "#4d2b15");
 
   // =========================
   // PLANTS
@@ -342,61 +328,6 @@ export function drawOffice(ctx: Ctx, W: number, H: number) {
   }
 
   // =========================
-  // PANTRY
-  // =========================
-
-  box(ctx, 650, 100, 45, 90, "#dfe4ec", "#b7c0cc");
-
-  box(ctx, 705, 105, 22, 48, "#60a5fa", "#2563eb");
-
-  box(ctx, 630, 205, 100, 40, "#8a5a32", "#6e4424");
-
-  // cups
-
-  box(ctx, 645, 214, 8, 8, "#fff");
-  box(ctx, 660, 214, 8, 8, "#fff");
-  box(ctx, 675, 214, 8, 8, "#fff");
-
-  // =========================
-  // MEETING CORNER
-  // =========================
-
-  ctx.fillStyle = "#d8dee9";
-
-  ctx.beginPath();
-
-  ctx.roundRect(560, 360, 160, 110, 14);
-
-  ctx.fill();
-
-  ctx.fillStyle = "#6b4a2e";
-
-  ctx.beginPath();
-
-  ctx.roundRect(590, 395, 100, 35, 10);
-
-  ctx.fill();
-
-  const chair = (x: number, y: number) => {
-    ctx.fillStyle = "#4b5563";
-
-    ctx.beginPath();
-
-    ctx.roundRect(x, y, 16, 16, 4);
-
-    ctx.fill();
-  };
-
-  chair(620, 370);
-  chair(645, 370);
-
-  chair(620, 440);
-  chair(645, 440);
-
-  chair(570, 405);
-  chair(695, 405);
-
-  // =========================
   // PLANTS
   // =========================
 
@@ -432,11 +363,127 @@ export function drawOffice(ctx: Ctx, W: number, H: number) {
   boxLabel(ctx, 30, 224 + 78, 60, 16, "<== Lobby");
 }
 
+// โรงอาหาร — โทนครีม/ส้มอุ่น + เคาน์เตอร์อาหาร (buffet line) + โต๊ะกินข้าวพร้อมเก้าอี้
+export function drawCanteen(ctx: Ctx, W: number, H: number) {
+  const WALL = (WALL_ROWS + 1) * CELL;
+
+  // =========================
+  // FLOOR — กระเบื้องครีมสลับลาย
+  // =========================
+  for (let y = WALL; y < H; y += 16) {
+    ctx.fillStyle = ((y / 16) | 0) % 2 ? "#f3e6cf" : "#ecdcbf";
+    ctx.fillRect(0, y, W, 16);
+  }
+  ctx.strokeStyle = "rgba(120,90,40,.06)";
+  ctx.lineWidth = 1;
+  for (let y = WALL; y <= H; y += 16) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+
+  // =========================
+  // TOP WALL + ป้ายชื่อ
+  // =========================
+  box(ctx, 0, 0, W, WALL, "#e7c79a", "#c9a877");
+  box(ctx, W / 2 - 80, 10, 160, 40, "#fff3e0", "#e0c8a0");
+  ctx.fillStyle = "#2d2d2d";
+  ctx.font = "700 18px Inter";
+  ctx.textAlign = "center";
+  ctx.fillText("CANTEEN", W / 2, 34);
+
+  // =========================
+  // BUFFET COUNTER — เคาน์เตอร์อาหารยาวใต้ผนังบน
+  // =========================
+  const cx0 = 120;
+  const cy0 = 90;
+  const cw = 528;
+  box(ctx, cx0, cy0, cw, 46, "#9c6b3f", "#754d2b"); // ตัวเคาน์เตอร์ไม้
+  box(ctx, cx0, cy0 - 6, cw, 8, "#cdd2da", "#aab3bf"); // ขอบสแตนเลส
+  // ถาดอาหารสีต่าง ๆ บนเคาน์เตอร์
+  const trays = ["#d9534f", "#f0ad4e", "#5cb85c", "#e8c14d", "#c97b54", "#7aa6c2"];
+  trays.forEach((c, i) => box(ctx, cx0 + 24 + i * 84, cy0 + 12, 60, 24, c, "#00000022"));
+  // sneeze guard (กระจกกันไอ) — เส้นบาง ๆ เหนือถาด
+  ctx.strokeStyle = "rgba(120,160,200,.5)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(cx0 + 12, cy0 - 24, cw - 24, 22);
+
+  // =========================
+  // DINING TABLES — โต๊ะกลม + เก้าอี้ 4 ตัว
+  // =========================
+  const chair = (x: number, y: number) => {
+    ctx.fillStyle = "#8a5a32";
+    ctx.beginPath();
+    ctx.roundRect(x - 9, y - 9, 18, 18, 5);
+    ctx.fill();
+  };
+
+  const diningTable = (tx: number, ty: number) => {
+    // เก้าอี้ 4 ทิศ
+    chair(tx, ty - 34);
+    chair(tx, ty + 34);
+    chair(tx - 34, ty);
+    chair(tx + 34, ty);
+    // โต๊ะกลม
+    ctx.fillStyle = "#f6efe2";
+    ctx.beginPath();
+    ctx.arc(tx, ty, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#d9cdb4";
+    ctx.beginPath();
+    ctx.arc(tx, ty, 26, 0, Math.PI * 2);
+    ctx.stroke();
+    // จานบนโต๊ะ
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(tx, ty, 9, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 3; col++) {
+      diningTable(170 + col * 210, 230 + row * 150);
+    }
+  }
+
+  // =========================
+  // DRINKS / VENDING — มุมขวาบน
+  // =========================
+  box(ctx, W - 70, 90, 46, 80, "#cdd2da", "#aab3bf"); // ตู้กดน้ำ
+  box(ctx, W - 60, 104, 26, 30, "#4674a4", "#2f567f"); // จอ/ช่องกด (สีน้ำเงิน)
+  box(ctx, W - 58, 142, 22, 10, "#222"); // ช่องรับแก้ว
+
+  // =========================
+  // PLANTS
+  // =========================
+  const plant = (x: number, y: number) => {
+    box(ctx, x - 14, y, 28, 16, "#8b5e3c", "#6e4424");
+    ctx.fillStyle = "#4caf50";
+    ctx.beginPath();
+    ctx.arc(x, y - 10, 18, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  plant(150, 470); // เลี่ยงทับประตูล่างซ้าย
+  plant(W - 40, 470);
+
+  // =========================
+  // DOOR — กลับ Lobby (ขอบล่างซ้าย คอลัมน์ 1–2 ตรงกับ DOORS.canteen)
+  // =========================
+  box(ctx, CELL, H - CELL, CELL * 2, CELL, "#3d2613", "#221208");
+  ctx.fillStyle = "#d0b45c";
+  ctx.beginPath();
+  ctx.arc(CELL * 2, H - CELL / 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+  boxLabel(ctx, CELL, H - CELL, CELL * 2, CELL, "↓ Lobby");
+}
+
 // เลือก scene วาดตามชื่อห้อง (default = lobby)
 export const ROOM_SCENE: Record<RoomName, SceneFn> = {
   lobby: drawRoom,
   meeting_room: drawMeetingRoom,
   office: drawOffice,
+  canteen: drawCanteen,
 };
 
 // วาดผู้เล่นทุกคน (players = {id:{x,y,name}}, myId = id ตัวเอง)

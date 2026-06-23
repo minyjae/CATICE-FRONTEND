@@ -1,7 +1,6 @@
 // วาดห้อง cozy top-down (พื้นไม้ + เฟอร์นิเจอร์) + ผู้เล่น — logic วาดล้วน ๆ ไม่พึ่ง React
 import { CELL, WALL_ROWS } from "../constants";
-import { colorFor } from "../../../shared/colors";
-import type { Player, RoomName } from "../../../shared/protocol";
+import type { RoomName } from "../../../shared/protocol";
 
 type Ctx = CanvasRenderingContext2D;
 type SceneFn = (ctx: Ctx, W: number, H: number) => void;
@@ -485,33 +484,3 @@ export const ROOM_SCENE: Record<RoomName, SceneFn> = {
   office: drawOffice,
   canteen: drawCanteen,
 };
-
-// วาดผู้เล่นทุกคน (players = {id:{x,y,name}}, myId = id ตัวเอง)
-export function drawPlayers(ctx: Ctx, players: Record<string, Player>, myId: string | null) {
-  for (const id in players) {
-    const p = players[id];
-    const cx = p.x * CELL + CELL / 2;
-    const cy = p.y * CELL + CELL / 2;
-
-    ctx.fillStyle = "rgba(0,0,0,.18)";
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + CELL / 2 - 4, CELL / 2 - 5, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = colorFor(id);
-    ctx.beginPath();
-    ctx.arc(cx, cy, CELL / 2 - 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineWidth = id === myId ? 3 : 2;
-    ctx.strokeStyle = id === myId ? "#fff" : "rgba(0,0,0,.45)";
-    ctx.stroke();
-
-    ctx.font = "700 12px Inter, sans-serif";
-    ctx.textAlign = "center";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(255,255,255,.85)";
-    ctx.strokeText(p.name || "…", cx, cy - CELL / 2);
-    ctx.fillStyle = "#2a1d0e";
-    ctx.fillText(p.name || "…", cx, cy - CELL / 2);
-  }
-}

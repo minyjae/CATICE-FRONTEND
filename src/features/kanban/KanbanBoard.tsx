@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { DragEvent, FormEvent } from "react";
 import { ROLE_LABEL } from "../auth/roles";
-import type { PublicUser, Send, Task, TaskStatus } from "../../shared/protocol";
+import type { Board, PublicUser, Send, Task, TaskStatus } from "../../shared/protocol";
 
 // 3 คอลัมน์ map กับ status ที่ backend ใช้
 const COLUMNS: [TaskStatus, string][] = [
@@ -22,6 +22,7 @@ interface Draft {
 }
 
 interface KanbanBoardProps {
+  boards: Record<string, Board>;
   tasks: Record<string, Task>;
   users?: PublicUser[];
   send: Send;
@@ -29,20 +30,36 @@ interface KanbanBoardProps {
   onClose: () => void;
 }
 
-// Kanban board แบบ real-time — รับ tasks (object keyed by id), users (รายชื่อทั้งหมดสำหรับ selector),
-// send(type,payload) จาก ws เส้นเดิม, myId
-export default function KanbanBoard({ tasks, users = [], send, myId, onClose }: KanbanBoardProps) {
-  const [draft, setDraft] = useState<Draft | null>(null); // null = ปิดฟอร์ม
-  const list = Object.values(tasks);
+// Kanban หลายบอร์ดแบบ real-time — board/task เป็น single source of truth = server
+// ส่ง message แล้ว "รอ broadcast" ค่อย render (ไม่แก้ UI เอง) กันสถานะเพี้ยนเมื่อหลายคนแก้พร้อมกัน
+export default function KanbanBoard({ boards, tasks, users = [], send, myId, onClose }: KanbanBoardProps) {
+  const [boardId, setBoardId] = useState<string | null>(null); // null = หน้ารายการบอร์ด
+  const [draft, setDraft] = useState<Draft | null>(null); // null = ปิดฟอร์มการ์ด
+
+  // บอร์ดที่เปิดอยู่ — ถ้าโดนลบไปแล้ว (broadcast) จะกลายเป็น undefined → ตกกลับหน้ารายการเอง
+  const board = boardId ? boards[boardId] : null;
   // map id → ชื่อ ใช้แสดงบนการ์ดแทน id ดิบ ๆ
   const nameById: Record<string, string> = Object.fromEntries(users.map((u) => [u.id, u.name]));
 
+  // ----- board actions -----
+  const createBoard = () => {
+    const name = window.prompt("ชื่อบอร์ดใหม่")?.trim();
+    if (name) send("board_create", { name });
+  };
+  const renameBoard = (b: Board) => {
+    const name = window.prompt("เปลี่ยนชื่อบอร์ด", b.name)?.trim();
+    if (name && name !== b.name) send("board_rename", { id: b.id, name });
+  };
+  const deleteBoard = (b: Board) => {
+    if (window.confirm(`ลบบอร์ด "${b.name}"?\nการ์ดทั้งหมดในบอร์ดนี้จะถูกลบด้วย`)) send("board_delete", { id: b.id });
+  };
+
+  // ----- task draft -----
   const openCreate = () => setDraft({ title: "", detail: "", assignTo: [] });
   const openEdit = (t: Task) =>
     setDraft({ id: t.id, title: t.title, detail: t.detail || "", assignTo: t.assign_to || [] });
   const closeForm = () => setDraft(null);
 
-  // toggle ผู้รับมอบหมายใน draft (เลือกได้หลายคน)
   const toggleAssignee = (uid: string) =>
     setDraft((d) =>
       d
@@ -55,14 +72,14 @@ export default function KanbanBoard({ tasks, users = [], send, myId, onClose }: 
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!draft) return;
+    if (!draft || !board) return;
     const title = draft.title.trim();
     if (!title) return;
     const assign_to = draft.assignTo;
     const detail = draft.detail.trim();
-    // ขาออก: ห้ามส่ง id/created_by ตอนสร้าง (server แจกเอง)
+    // ขาออก: ห้ามส่ง id/created_by ตอนสร้าง (server แจกเอง); task_create ต้องแนบ board_id
     if (draft.id) send("task_update", { id: draft.id, title, detail, assign_to });
-    else send("task_create", { title, detail, assign_to });
+    else send("task_create", { board_id: board.id, title, detail, assign_to });
     closeForm();
   }
 
@@ -75,11 +92,62 @@ export default function KanbanBoard({ tasks, users = [], send, myId, onClose }: 
     if (task) move(task, status);
   }
 
+  // =========================
+  // หน้ารายการบอร์ด
+  // =========================
+  if (!board) {
+    const list = Object.values(boards);
+    return (
+      <div className="board-overlay" onClick={onClose}>
+        <div className="board" onClick={(e) => e.stopPropagation()}>
+          <div className="board-head">
+            <span className="board-title">📋 บอร์ดทั้งหมด</span>
+            <button className="ghost" onClick={createBoard}>
+              + สร้างบอร์ด
+            </button>
+            <span className="spacer" />
+            <button className="ghost" onClick={onClose}>
+              ✕ ปิด
+            </button>
+          </div>
+
+          <div className="board-list">
+            {list.length === 0 && <div className="muted-sm">ยังไม่มีบอร์ด — กด “สร้างบอร์ด” เพื่อเริ่ม</div>}
+            {list.map((b) => {
+              const count = Object.values(tasks).filter((t) => t.board_id === b.id).length;
+              return (
+                <div key={b.id} className="board-list-item">
+                  <button className="board-list-open" onClick={() => setBoardId(b.id)}>
+                    <span className="board-list-name">{b.name}</span>
+                    <span className="board-list-meta">{count} การ์ด</span>
+                  </button>
+                  <button className="icon-btn" title="เปลี่ยนชื่อ" onClick={() => renameBoard(b)}>
+                    ✎
+                  </button>
+                  <button className="icon-btn" title="ลบบอร์ด" onClick={() => deleteBoard(b)}>
+                    🗑
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================
+  // มุมมองบอร์ด (3 columns ของ board ที่เลือก)
+  // =========================
+  const cardsOfBoard = Object.values(tasks).filter((t) => t.board_id === board.id);
   return (
     <div className="board-overlay" onClick={onClose}>
       <div className="board" onClick={(e) => e.stopPropagation()}>
         <div className="board-head">
-          <span className="board-title">📋 Task Board</span>
+          <button className="ghost" onClick={() => setBoardId(null)}>
+            ‹ บอร์ด
+          </button>
+          <span className="board-title">{board.name}</span>
           <button className="ghost" onClick={openCreate}>
             + การ์ด
           </button>
@@ -91,7 +159,7 @@ export default function KanbanBoard({ tasks, users = [], send, myId, onClose }: 
 
         <div className="board-cols">
           {COLUMNS.map(([status, label]) => {
-            const cards = list.filter((t) => t.status === status);
+            const cards = cardsOfBoard.filter((t) => t.status === status);
             return (
               <div
                 key={status}

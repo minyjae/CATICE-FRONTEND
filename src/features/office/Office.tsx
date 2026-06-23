@@ -19,12 +19,16 @@ interface OfficeProps {
 // เปลือกหน้าออฟฟิศ: ต่อ realtime ทั้งหมดผ่าน useRoom แล้วประกอบ canvas + panel ต่าง ๆ
 export default function Office({ me, onLogout }: OfficeProps) {
   const displayName = me.email.split("@")[0];
-  const { canvasRef, room, messages, videos, status, myId, tasks, send, sendChat, setTyping, switchRoom } = useRoom({
-    room: "lobby",
-    displayName,
-  });
+  const { canvasRef, pixiCanvasRef, room, roomMsgs, allMsgs, privateMsgs, onlineIds, videos, status, myId, boards, tasks, send, sendChat, setTyping, switchRoom } =
+    useRoom({
+      room: "lobby",
+      displayName,
+    });
   const [boardOpen, setBoardOpen] = useState(false);
-  const [users, setUsers] = useState<PublicUser[]>([]); // user ที่สมัครทั้งหมด → selector มอบหมาย task
+  const [users, setUsers] = useState<PublicUser[]>([]); // user ที่สมัครทั้งหมด → selector มอบหมาย task + แชตส่วนตัว
+  // คลิกสมาชิก → ขอเปิดแท็บแชตส่วนตัวกับคนนั้น (n = nonce ให้เปิดซ้ำคนเดิมได้)
+  const [dmRequest, setDmRequest] = useState<{ id: string; n: number } | null>(null);
+  const openDm = (id: string) => setDmRequest((r) => ({ id, n: (r?.n ?? 0) + 1 }));
 
   // โหลดรายชื่อ user ครั้งเดียวตอน mount (ใช้ทำ selector บนบอร์ด)
   useEffect(() => {
@@ -65,15 +69,28 @@ export default function Office({ me, onLogout }: OfficeProps) {
         <div className="main">
           <div className="stage">
             <VideoPanel videos={videos} />
-            <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H} />
+            <div className="stage-canvas" style={{ width: CANVAS_W, height: CANVAS_H }}>
+              <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H} />
+              <canvas ref={pixiCanvasRef} width={CANVAS_W} height={CANVAS_H} className="player-layer" />
+            </div>
             <div className="hint">↑ ↓ ← → เดิน</div>
             <div className="status">{status}</div>
           </div>
         </div>
 
         <div className="side">
-          <MembersPanel users={users} myId={myId} />
-          <ChatPanel messages={messages} myId={myId} onSend={sendChat} onTypingChange={setTyping} />
+          <MembersPanel users={users} myId={myId} onSelect={openDm} />
+          <ChatPanel
+            roomMsgs={roomMsgs}
+            allMsgs={allMsgs}
+            privateMsgs={privateMsgs}
+            onlineIds={onlineIds}
+            users={users}
+            myId={myId}
+            dmRequest={dmRequest}
+            onSend={sendChat}
+            onTypingChange={setTyping}
+          />
         </div>
       </div>
 
@@ -82,7 +99,7 @@ export default function Office({ me, onLogout }: OfficeProps) {
       </button>
 
       {boardOpen && (
-        <KanbanBoard tasks={tasks} users={users} send={send} myId={myId} onClose={() => setBoardOpen(false)} />
+        <KanbanBoard boards={boards} tasks={tasks} users={users} send={send} myId={myId} onClose={() => setBoardOpen(false)} />
       )}
     </div>
   );

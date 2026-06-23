@@ -43,7 +43,7 @@ export const DOORS: Partial<Record<RoomName, Door[]>> = {
     { x1: 23, x2: 23, y1: 9, y2: 10, to: "office", spawn: { x: 1, y: 9 } },
     // ประตูบนซ้าย → Canteen (แถวบนสุดที่เดินถึง y=1, คอลัมน์ 1–2)
     // → ไปโผล่ "ล่างซ้าย" ของ canteen (เหนือประตูกลับ) คอลัมน์ตรงกัน
-    { x1: 1, x2: 2, y1: 1, y2: 1, to: "canteen", spawn: { x: 2, y: 13 } },
+    { x1: 1, x2: 2, y1: 1, y2: 1, to: "canteen", spawn: { x: 2, y: 14 } },
   ],
 
   meeting_room: [{ x1: 23, x2: 23, y1: 9, y2: 10, to: "lobby", spawn: { x: 1, y: 9 } }],

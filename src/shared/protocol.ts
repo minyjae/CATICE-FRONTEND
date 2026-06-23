@@ -28,9 +28,16 @@ export interface RoomObject {
   y: number;
 }
 
-// domain.Task (json) — การ์ดบน Kanban
+// domain.Board (json) — บอร์ด Kanban (global ไม่ผูกห้อง)
+export interface Board {
+  id: string;
+  name: string;
+}
+
+// domain.Task (json) — การ์ดบน Kanban (ผูกกับ board ผ่าน board_id)
 export interface Task {
   id: string;
+  board_id: string;
   title: string;
   detail: string;
   status: TaskStatus;
@@ -52,10 +59,16 @@ export interface PublicUser {
   role: Role;
 }
 
+// ขอบเขตแชต: ห้องนี้ / ทุกคนทุกห้อง / ส่วนตัวรายคน
+export type ChatScope = "room" | "all" | "private";
+
 // protocol.ChatBroadcast — แชตขาออกจาก server (มี id/name ของผู้พูด)
+// to มีเฉพาะ scope=private (= userId ปลายทาง)
 export interface ChatBroadcast {
+  scope: ChatScope;
   id: string;
   name: string;
+  to?: string;
   text: string;
 }
 
@@ -80,6 +93,9 @@ export type ServerMsg =
   | { type: "chat"; payload: ChatBroadcast }
   | { type: "signal"; payload: { from: string; data: SignalData } }
   | { type: "object"; payload: RoomObject }
+  | { type: "board_create"; payload: Board }
+  | { type: "board_rename"; payload: Board }
+  | { type: "board_delete"; payload: { id: string } }
   | { type: "task_create"; payload: Task }
   | { type: "task_move"; payload: Task }
   | { type: "task_update"; payload: Task }
@@ -94,10 +110,14 @@ export interface ClientMsgMap {
   join: { name: string };
   move: { x: number; y: number };
   switch_room: { room: RoomName };
-  chat: { text: string };
+  // ส่งแชต: ละ scope = ห้องนี้; scope=private ต้องมี to (userId ปลายทาง)
+  chat: { scope?: ChatScope; to?: string; text: string };
   signal: { to: string; data: SignalData };
   object: { name: string; x: number; y: number };
-  task_create: { title: string; detail: string; assign_to: string[] };
+  board_create: { name: string };
+  board_rename: { id: string; name: string };
+  board_delete: { id: string };
+  task_create: { board_id: string; title: string; detail: string; assign_to: string[] };
   task_move: { id: string; status: TaskStatus };
   task_update: { id: string; title: string; detail: string; assign_to: string[] };
   task_delete: { id: string };

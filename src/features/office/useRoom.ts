@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ROOM_SCENE } from "./canvas/room";
 import { createPlayerLayer } from "./canvas/playerLayer";
 import { nextCell } from "./movement";
-import { PROXIMITY, doorAt, blockedAt } from "./constants";
+import { PROXIMITY, FLOOR_ROW, doorAt, blockedAt } from "./constants";
 import type { Cell } from "./constants";
 import { createVideoController } from "../video/videoController";
 import type { VideoTile } from "../video/videoController";
@@ -42,6 +42,7 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
   const [roomMsgsByRoom, setRoomMsgsByRoom] = useState<Record<string, ChatMsg[]>>({});
   const [allMsgs, setAllMsgs] = useState<ChatMsg[]>([]);
   const [privateMsgs, setPrivateMsgs] = useState<Record<string, ChatMsg[]>>({});
+  
   const [videos, setVideos] = useState<VideoTile[]>([]);
   const [status, setStatus] = useState("กำลังเชื่อมต่อ...");
   const [myId, setMyId] = useState<string | null>(null);
@@ -259,6 +260,11 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
       if (door) {
         switchRoom(door.to, door.spawn);
 
+        return;
+      }
+
+      // ชนผนังบน (ที่ไม่ใช่ประตู) → ไม่ขยับ — เช็คหลังประตู เพื่อให้ "เดินชนผนังเข้าประตู" ได้
+      if (cell.y < FLOOR_ROW) {
         return;
       }
 

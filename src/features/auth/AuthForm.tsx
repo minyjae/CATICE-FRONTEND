@@ -53,7 +53,7 @@ export default function AuthForm({ onAuthed }: AuthFormProps) {
   return (
     <div className="auth-wrap">
       <form className="card" onSubmit={submit}>
-        <h1>🐱 Catice2</h1>
+        <h1>🐱 Catice</h1>
         <div className="sub">Virtual Office · เดินคุยกันแบบ real-time</div>
 
         <div className="tabs">

@@ -4,11 +4,15 @@ import type { RoomName } from "../../shared/protocol";
 export const CELL = 32; // ขนาด 1 ช่อง (px)
 export const GRID_W = 24; // 768 / 32
 export const GRID_H = 16; // 512 / 32
-export const WALL_ROWS = 1; // แถวบนสุดเป็นผนัง เดินเข้าไม่ได้
-export const PROXIMITY = 2; // ระยะ (ช่อง) ที่ถือว่า "ใกล้" → เปิดวิดีโอ
+export const WALL_ROWS = 2; // แถวบนสุดเป็นผนัง เดินเข้าไม่ได้
+export const PROXIMITY = 3; // ระยะ (ช่อง) ที่ถือว่า "ใกล้" → เปิดวิดีโอ
 
 export const CANVAS_W = GRID_W * CELL; // 768
 export const CANVAS_H = GRID_H * CELL; // 512
+
+// ผนังบนสูง = WALL_ROWS+1 แถว (แถวล่างเป็นฐานหนา) — ใช้ค่าชุดเดียวคุมทั้ง "วาด" (room.ts) และ "เดิน" (movement.ts)
+export const FLOOR_ROW = WALL_ROWS + 1; // แถวแรกที่เดินได้ (ใต้ผนัง) = 3
+export const WALL_PX = FLOOR_ROW * CELL; // ความสูงผนังบน (px) = 96
 
 // พิกัดช่องบนกริด
 export interface Cell {
@@ -41,9 +45,10 @@ export const DOORS: Partial<Record<RoomName, Door[]>> = {
   lobby: [
     { x1: 0, x2: 0, y1: 9, y2: 10, to: "meeting_room", spawn: { x: 22, y: 9 } },
     { x1: 23, x2: 23, y1: 9, y2: 10, to: "office", spawn: { x: 1, y: 9 } },
-    // ประตูบนซ้าย → Canteen (แถวบนสุดที่เดินถึง y=1, คอลัมน์ 1–2)
+    // ประตูบนซ้าย → Canteen: hitbox อยู่ "ในผนัง" (แถว 2, คอลัมน์ 1–2)
+    // เดินจากแถว 3 ชนขึ้นผนังเข้าประตูได้ (onKey เช็คประตูก่อนบล็อกผนัง)
     // → ไปโผล่ "ล่างซ้าย" ของ canteen (เหนือประตูกลับ) คอลัมน์ตรงกัน
-    { x1: 1, x2: 2, y1: 1, y2: 1, to: "canteen", spawn: { x: 2, y: 14 } },
+    { x1: 1, x2: 2, y1: 2, y2: 2, to: "canteen", spawn: { x: 2, y: 14 } },
   ],
 
   meeting_room: [{ x1: 23, x2: 23, y1: 9, y2: 10, to: "lobby", spawn: { x: 1, y: 9 } }],
@@ -51,8 +56,8 @@ export const DOORS: Partial<Record<RoomName, Door[]>> = {
   office: [{ x1: 0, x2: 0, y1: 9, y2: 10, to: "lobby", spawn: { x: 22, y: 9 } }],
 
   // ประตูล่างซ้าย กลับ Lobby (แถวล่างสุด y=15, คอลัมน์ 1–2 ตรงกับประตูที่เข้ามา)
-  // → ไปโผล่ใต้ประตูบนซ้ายของ lobby
-  canteen: [{ x1: 1, x2: 2, y1: 15, y2: 15, to: "lobby", spawn: { x: 2, y: 2 } }],
+  // → ไปโผล่ "ใต้" ประตู canteen ของ lobby (FLOOR_ROW+1=4) ไม่ทับช่องประตู
+  canteen: [{ x1: 1, x2: 2, y1: 15, y2: 15, to: "lobby", spawn: { x: 2, y: 3 } }],
 };
 
 // คืน door ถ้าช่อง (x,y) อยู่ในโซนประตูของห้อง room, ไม่ใช่คืน null
@@ -74,7 +79,7 @@ export interface PxRect {
 
 export const OBSTACLES_PX: Partial<Record<RoomName, PxRect[]>> = {
   lobby: [
-    { x: 220, y: 70, w: 260, h: 56 }, // coffee bar
+    { x: 220, y: 120, w: 260, h: 56 }, // coffee bar (ขยับลงพ้นผนัง 96px)
     { x: 40, y: 400, w: 40, h: 40 }, // plant ซ้าย
     { x: 690, y: 400, w: 40, h: 40 }, // plant ขวา
   ],
@@ -85,11 +90,11 @@ export const OBSTACLES_PX: Partial<Record<RoomName, PxRect[]>> = {
   ],
 
   office: [
-    // 4 คลัสเตอร์โต๊ะ (โต๊ะ 2 คอลัมน์ต่อคลัสเตอร์ เว้นช่องเดิน)
-    { x: 70, y: 100, w: 120, h: 120 },
-    { x: 210, y: 100, w: 120, h: 120 },
-    { x: 400, y: 100, w: 120, h: 120 },
-    { x: 540, y: 100, w: 120, h: 120 },
+    // 4 คลัสเตอร์โต๊ะ (โต๊ะ 2 คอลัมน์ต่อคลัสเตอร์ เว้นช่องเดิน) — แถวบนขยับลงพ้นผนัง
+    { x: 70, y: 120, w: 120, h: 120 },
+    { x: 210, y: 120, w: 120, h: 120 },
+    { x: 400, y: 120, w: 120, h: 120 },
+    { x: 540, y: 120, w: 120, h: 120 },
     { x: 70, y: 280, w: 120, h: 120 },
     { x: 210, y: 280, w: 120, h: 120 },
     { x: 400, y: 280, w: 120, h: 120 },
@@ -100,7 +105,7 @@ export const OBSTACLES_PX: Partial<Record<RoomName, PxRect[]>> = {
   ],
 
   canteen: [
-    { x: 120, y: 84, w: 528, h: 52 }, // buffet counter
+    { x: 120, y: 114, w: 528, h: 52 }, // buffet counter (ขยับลงพ้นผนัง)
     // โต๊ะกลม 6 ตัว (กรอบรอบโต๊ะ ไม่รวมเก้าอี้)
     { x: 144, y: 204, w: 52, h: 52 },
     { x: 354, y: 204, w: 52, h: 52 },
@@ -108,7 +113,7 @@ export const OBSTACLES_PX: Partial<Record<RoomName, PxRect[]>> = {
     { x: 144, y: 354, w: 52, h: 52 },
     { x: 354, y: 354, w: 52, h: 52 },
     { x: 564, y: 354, w: 52, h: 52 },
-    { x: 698, y: 90, w: 46, h: 80 }, // ตู้กดน้ำ
+    { x: 698, y: 120, w: 46, h: 80 }, // ตู้กดน้ำ (ขยับลงพ้นผนัง)
     { x: 136, y: 442, w: 28, h: 44 }, // plant ซ้าย
     { x: 714, y: 442, w: 28, h: 44 }, // plant ขวา
   ],

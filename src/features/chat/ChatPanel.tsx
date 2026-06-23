@@ -56,6 +56,7 @@ export default function ChatPanel({
 
   // unread ของแท็บ ห้องนี้ / ทั้งหมด — มีข้อความใหม่ตอนไม่ได้เปิดแท็บนั้น + ไม่ใช่ของเราเอง
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     const fresh = (list: ChatMsg[], seen: number) => {
       const last = list[list.length - 1];
       return list.length > seen && !!last && last.id !== myId;
@@ -67,6 +68,7 @@ export default function ChatPanel({
     if (tab === "all") setAllUnread(false);
     else if (fresh(allMsgs, seenAll.current)) setAllUnread(true);
     seenAll.current = allMsgs.length;
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [roomMsgs, allMsgs, tab, myId]);
 
   // มีข้อความใหม่เข้า thread ที่ไม่ได้เปิดอยู่ + ไม่ใช่ข้อความเราเอง → ทำเครื่องหมายยังไม่อ่าน

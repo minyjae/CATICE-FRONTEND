@@ -1,5 +1,5 @@
 // วาดห้อง cozy top-down (พื้นไม้ + เฟอร์นิเจอร์) + ผู้เล่น — logic วาดล้วน ๆ ไม่พึ่ง React
-import { CELL, WALL_ROWS } from "../constants";
+import { CELL, WALL_PX } from "../constants";
 import type { RoomName } from "../../../shared/protocol";
 
 type Ctx = CanvasRenderingContext2D;
@@ -23,7 +23,7 @@ function boxLabel(ctx: Ctx, x: number, y: number, w: number, h: number, text: st
 }
 
 export function drawRoom(ctx: Ctx, W: number, H: number) {
-  const WALL = (WALL_ROWS + 1) * CELL;
+  const WALL = WALL_PX;
 
   // =========================
   // FLOOR
@@ -67,12 +67,12 @@ export function drawRoom(ctx: Ctx, W: number, H: number) {
   // =========================
   // COFFEE BAR
   // =========================
-  box(ctx, 220, 70, 260, 56, "#6e4526", "#4d2f18");
+  box(ctx, 220, 120, 260, 56, "#6e4526", "#4d2f18");
 
-  box(ctx, 290, 80, 160, 24, "#1c2435", "#0d1525");
+  box(ctx, 290, 130, 160, 24, "#1c2435", "#0d1525");
 
   for (let i = 0; i < 3; i++) {
-    box(ctx, 210 + i * 24, 60, 12, 20, "#c39a1c", "#9c7a15");
+    box(ctx, 210 + i * 24, 110, 12, 20, "#c39a1c", "#9c7a15");
   }
 
   // =========================
@@ -138,7 +138,7 @@ export function drawRoom(ctx: Ctx, W: number, H: number) {
 
 // ห้องประชุม — โทนน้ำเงินเทา + โต๊ะประชุมกลาง + ไวท์บอร์ด (ดูต่างจาก lobby ชัด ๆ)
 export function drawMeetingRoom(ctx: Ctx, W: number, H: number) {
-  const WALL = (WALL_ROWS + 1) * CELL;
+  const WALL = WALL_PX;
 
   // พื้นพรมสีเข้ม
   for (let y = WALL; y < H; y += 16) {
@@ -225,7 +225,7 @@ export function drawMeetingRoom(ctx: Ctx, W: number, H: number) {
 
 // ออฟฟิศ dev — โทนสว่าง + โต๊ะทำงานเป็นคลัสเตอร์ + เซิร์ฟเวอร์แร็ค
 export function drawOffice(ctx: Ctx, W: number, H: number) {
-  const WALL = (WALL_ROWS + 1) * CELL;
+  const WALL = WALL_PX;
 
   // =========================
   // FLOOR
@@ -305,9 +305,9 @@ export function drawOffice(ctx: Ctx, W: number, H: number) {
   // OFFICE DESKS
   // =========================
 
-  deskCluster(70, 100);
+  deskCluster(70, 120);
 
-  deskCluster(400, 100);
+  deskCluster(400, 120);
 
   deskCluster(70, 280);
 
@@ -364,7 +364,7 @@ export function drawOffice(ctx: Ctx, W: number, H: number) {
 
 // โรงอาหาร — โทนครีม/ส้มอุ่น + เคาน์เตอร์อาหาร (buffet line) + โต๊ะกินข้าวพร้อมเก้าอี้
 export function drawCanteen(ctx: Ctx, W: number, H: number) {
-  const WALL = (WALL_ROWS + 1) * CELL;
+  const WALL = WALL_PX;
 
   // =========================
   // FLOOR — กระเบื้องครีมสลับลาย
@@ -396,7 +396,7 @@ export function drawCanteen(ctx: Ctx, W: number, H: number) {
   // BUFFET COUNTER — เคาน์เตอร์อาหารยาวใต้ผนังบน
   // =========================
   const cx0 = 120;
-  const cy0 = 90;
+  const cy0 = 120; // ขยับเคาน์เตอร์ลงพ้นผนัง 96px
   const cw = 528;
   box(ctx, cx0, cy0, cw, 46, "#9c6b3f", "#754d2b"); // ตัวเคาน์เตอร์ไม้
   box(ctx, cx0, cy0 - 6, cw, 8, "#cdd2da", "#aab3bf"); // ขอบสแตนเลส
@@ -449,9 +449,9 @@ export function drawCanteen(ctx: Ctx, W: number, H: number) {
   // =========================
   // DRINKS / VENDING — มุมขวาบน
   // =========================
-  box(ctx, W - 70, 90, 46, 80, "#cdd2da", "#aab3bf"); // ตู้กดน้ำ
-  box(ctx, W - 60, 104, 26, 30, "#4674a4", "#2f567f"); // จอ/ช่องกด (สีน้ำเงิน)
-  box(ctx, W - 58, 142, 22, 10, "#222"); // ช่องรับแก้ว
+  box(ctx, W - 70, 120, 46, 80, "#cdd2da", "#aab3bf"); // ตู้กดน้ำ (ขยับลงพ้นผนัง)
+  box(ctx, W - 60, 134, 26, 30, "#4674a4", "#2f567f"); // จอ/ช่องกด (สีน้ำเงิน)
+  box(ctx, W - 58, 172, 22, 10, "#222"); // ช่องรับแก้ว
 
   // =========================
   // PLANTS

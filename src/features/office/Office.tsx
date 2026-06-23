@@ -9,8 +9,6 @@ import KanbanBoard from "../kanban/KanbanBoard";
 import MembersPanel from "../members/MembersPanel";
 import type { Me, PublicUser, RoomName } from "../../shared/protocol";
 
-const HELP_TEXT = "วิธีเล่น Catice2\n\n• ↑ ↓ ← →  เดิน\n• พิมพ์แชตด้านขวา\n• เดินเข้าใกล้กันเพื่อเปิดวิดีโอ";
-
 interface OfficeProps {
   me: Me;
   onLogout: () => void;
@@ -43,7 +41,7 @@ export default function Office({ me, onLogout }: OfficeProps) {
   return (
     <div className="app">
       <div className="topbar">
-        <span className="brand">🐱 Catice2</span>
+        <span className="brand">🐱 Catice</span>
         <span className="room-badge">{room}</span>
         <select className="room-select" value={room} onChange={(e) => switchRoom(e.target.value as RoomName)}>
           {ROOMS.map(([value, label]) => (
@@ -93,10 +91,6 @@ export default function Office({ me, onLogout }: OfficeProps) {
           />
         </div>
       </div>
-
-      <button className="help-fab" onClick={() => alert(HELP_TEXT)} title="วิธีเล่น">
-        ?
-      </button>
 
       {boardOpen && (
         <KanbanBoard boards={boards} tasks={tasks} users={users} send={send} myId={myId} onClose={() => setBoardOpen(false)} />

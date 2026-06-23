@@ -93,6 +93,10 @@ export type ServerMsg =
   | { type: "chat"; payload: ChatBroadcast }
   | { type: "signal"; payload: { from: string; data: SignalData } }
   | { type: "object"; payload: RoomObject }
+  | { type: "call_invite"; payload: { from: string } }
+  | { type: "call_accept"; payload: { from: string } }
+  | { type: "call_reject"; payload: { from: string } }
+  | { type: "call_cancel"; payload: { from: string } }
   | { type: "board_create"; payload: Board }
   | { type: "board_rename"; payload: Board }
   | { type: "board_delete"; payload: { id: string } }
@@ -113,6 +117,11 @@ export interface ClientMsgMap {
   // ส่งแชต: ละ scope = ห้องนี้; scope=private ต้องมี to (userId ปลายทาง)
   chat: { scope?: ChatScope; to?: string; text: string };
   signal: { to: string; data: SignalData };
+  // เชิญ/ตอบรับ/ปฏิเสธ/ยกเลิก สายวิดีโอ — backend ต้อง relay ไปยัง to (เหมือน signal)
+  call_invite: { to: string };
+  call_accept: { to: string };
+  call_reject: { to: string };
+  call_cancel: { to: string };
   object: { name: string; x: number; y: number };
   board_create: { name: string };
   board_rename: { id: string; name: string };

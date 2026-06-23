@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { ROOM_SCENE } from "./canvas/room";
 import { createPlayerLayer } from "./canvas/playerLayer";
 import { nextCell } from "./movement";
-import { PROXIMITY, FLOOR_ROW, doorAt, blockedAt } from "./constants";
+import { PROXIMITY, FLOOR_ROW, GRID_W, GRID_H, doorAt, blockedAt } from "./constants";
 import type { Cell } from "./constants";
 import { createVideoController } from "../video/videoController";
-import type { VideoTile } from "../video/videoController";
+import type { VideoTile, VideoController } from "../video/videoController";
 import { getToken } from "../auth/token";
 import type { Board, ChatMsg, ChatScope, Player, RoomName, Send, ServerMsg, Task } from "../../shared/protocol";
 
@@ -35,8 +35,15 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
   // เก็บใน ref + mirror เป็น state เฉพาะตอนสมาชิกเปลี่ยนจริง (กัน re-render ทุกก้าวเดิน)
   const onlineRef = useRef<Set<string>>(new Set());
 
+  // video controller (เก็บใน ref เพื่อให้ handler นอก effect เรียกได้) + โหมดสาย
+  const videoCtrlRef = useRef<VideoController | null>(null);
+  const modeRef = useRef<"invite" | "auto">("invite");
+
   const [room, setRoom] = useState<RoomName>(initialRoom);
   const [onlineIds, setOnlineIds] = useState<string[]>([]);
+  const [videoMode, setVideoModeState] = useState<"invite" | "auto">("invite");
+  const [incomingInvites, setIncomingInvites] = useState<string[]>([]); // คนที่ชวนเรา (รอตอบ)
+  const [outgoingInvites, setOutgoingInvites] = useState<string[]>([]); // คนที่เราชวน (รอเขาตอบ)
   // แชต 3 ขอบเขต (ephemeral — ไม่มีประวัติข้ามการ reconnect): ห้องนี้ / ทั้งหมด / ส่วนตัว
   // ห้องนี้แยกเก็บตามห้อง → ออกห้องแล้วกลับมายังเห็นแชตเดิม (ไม่ล้างตอนสลับห้อง)
   const [roomMsgsByRoom, setRoomMsgsByRoom] = useState<Record<string, ChatMsg[]>>({});
@@ -69,6 +76,7 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
       send,
       setVideos,
     });
+    videoCtrlRef.current = video;
 
     // presence helpers — mirror state เฉพาะตอนเซ็ตสมาชิกเปลี่ยนจริง
     const markOnline = (id: string) => {
@@ -104,6 +112,8 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
             playersRef.current = {};
             video.endAllCalls();
             resetOnline([]); // ออกจากห้องเก่า → presence เริ่มนับใหม่จากคนในห้องใหม่
+            setIncomingInvites([]); // คำเชิญของห้องเก่าถือเป็นโมฆะ
+            setOutgoingInvites([]);
             // ไม่ล้างแชต/board/task ตอนสลับห้อง — แชตห้องเก็บแยกต่อห้อง, board/task เป็น global
             roomRef.current = env.payload.room;
             setRoom(env.payload.room);
@@ -113,8 +123,9 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
           // ไม่งั้นใช้ตำแหน่งที่ backend กู้จาก Redis (welcome.x/y) — refresh/สลับจาก dropdown
           const door = nextSpawnRef.current;
           nextSpawnRef.current = null;
-          const x = door ? door.x : env.payload.x;
-          const y = door ? door.y : env.payload.y;
+          // กันตำแหน่งจาก backend (random spawn) ตกบนผนัง/นอกกริด → clamp ลงแถวแรกที่เดินได้
+          const x = Math.max(0, Math.min(GRID_W - 1, door ? door.x : env.payload.x));
+          const y = Math.max(FLOOR_ROW, Math.min(GRID_H - 1, door ? door.y : env.payload.y));
 
           playersRef.current[id] = { id, name: displayName, x, y };
           markOnline(id);
@@ -157,6 +168,25 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
 
         case "signal":
           video.handleSignal(env.payload);
+          break;
+
+        case "call_invite":
+          // มีคนชวนเรา → ขึ้น modal ให้ยอมรับ/ปฏิเสธ (ไม่ต่อสายจนกว่าจะ accept)
+          setIncomingInvites((p) => (p.includes(env.payload.from) ? p : [...p, env.payload.from]));
+          break;
+
+        case "call_accept":
+          // ปลายทางตอบรับ → เริ่ม WebRTC ฝั่งเรา (กฎ myId<peerId คุมคนยื่น offer)
+          video.startCall(env.payload.from);
+          setOutgoingInvites((p) => p.filter((x) => x !== env.payload.from));
+          break;
+
+        case "call_reject":
+          setOutgoingInvites((p) => p.filter((x) => x !== env.payload.from));
+          break;
+
+        case "call_cancel":
+          setIncomingInvites((p) => p.filter((x) => x !== env.payload.from));
           break;
 
         case "board_create":
@@ -220,6 +250,8 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
         playersRef.current = {};
         video.endAllCalls();
         resetOnline([]);
+        setIncomingInvites([]);
+        setOutgoingInvites([]);
         setBoards({});
         setTasks({});
         // แชต ephemeral — หลุดแล้วเริ่มใหม่ (ไม่มี snapshot แชตตอน join)
@@ -289,7 +321,9 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
     const ctx = canvas?.getContext("2d");
 
     // เลเยอร์ผู้เล่น (Pixi) ซ้อนบน canvas ห้อง — วาด avatar เป็น sprite animation
-    const playerLayer = pixiCanvasRef.current ? createPlayerLayer(pixiCanvasRef.current) : null;
+    const playerLayer = pixiCanvasRef.current
+      ? createPlayerLayer(pixiCanvasRef.current, { onPlayerClick: invite })
+      : null;
 
     let raf = 0;
 
@@ -310,7 +344,10 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
     // PROXIMITY VIDEO
     // =========================
 
-    const prox = setInterval(() => video.syncProximity(PROXIMITY), 500);
+    // เปิดสายอัตโนมัติเฉพาะโหมด "auto"; โหมด "invite" ไม่แตะ proximity (ต้องเชิญ+ยินยอม)
+    const prox = setInterval(() => {
+      if (modeRef.current === "auto") video.syncProximity(PROXIMITY);
+    }, 500);
 
     // =========================
     // CLEANUP
@@ -349,6 +386,45 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
         }),
       );
     }
+  };
+
+  // =========================
+  // VIDEO CALL (เปิดสายเอง → เชิญ → ปลายทางยินยอม)
+  // =========================
+
+  // สลับโหมด auto/invite — อัปเดต ref (ให้ proximity loop อ่านได้) พร้อม state
+  const setVideoMode = (m: "invite" | "auto"): void => {
+    modeRef.current = m;
+    setVideoModeState(m);
+  };
+
+  const startVideo = (): void => {
+    videoCtrlRef.current?.openCamera();
+  };
+
+  const leaveVideo = (): void => {
+    videoCtrlRef.current?.leaveCall();
+    setOutgoingInvites([]);
+  };
+
+  // เชิญผู้เล่นคนอื่นเข้าสาย (เรียกจากคลิก avatar) — เปิดกล้องเราก่อนถ้ายังไม่เปิด
+  function invite(id: string): void {
+    if (!id || id === myIdRef.current) return;
+    videoCtrlRef.current?.openCamera();
+    send("call_invite", { to: id });
+    setOutgoingInvites((p) => (p.includes(id) ? p : [...p, id]));
+  }
+
+  const acceptInvite = (from: string): void => {
+    send("call_accept", { to: from });
+    videoCtrlRef.current?.openCamera();
+    videoCtrlRef.current?.startCall(from);
+    setIncomingInvites((p) => p.filter((x) => x !== from));
+  };
+
+  const rejectInvite = (from: string): void => {
+    send("call_reject", { to: from });
+    setIncomingInvites((p) => p.filter((x) => x !== from));
   };
 
   // =========================
@@ -401,6 +477,14 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
     allMsgs,
     privateMsgs,
     onlineIds,
+    videoMode,
+    setVideoMode,
+    incomingInvites,
+    outgoingInvites,
+    startVideo,
+    leaveVideo,
+    acceptInvite,
+    rejectInvite,
     send,
     sendChat,
     setTyping,

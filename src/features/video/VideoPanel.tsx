@@ -4,10 +4,10 @@ interface VideoPanelProps {
   videos: VideoTile[];
 }
 
-// วิดีโอของคนที่อยู่ใกล้ (videos = [{ id, stream, me }]) — เป็นแถว flex เหนือ stage
-// ถ้าไม่มีวิดีโอของคนอื่นเลย (มีแค่ตัวเอง หรือว่างเปล่า) ให้ซ่อนแถบไป stage จะได้ยืดเต็ม
+// วิดีโอในสาย (videos = [{ id, stream, me }]) — เป็นแถว flex เหนือ stage
+// แสดงตั้งแต่ "เริ่มวิดีโอ" (มี tile ตัวเอง) แม้ยังไม่มี peer; ว่างจริงค่อยซ่อนให้ stage ยืดเต็ม
 export default function VideoPanel({ videos }: VideoPanelProps) {
-  if (videos.filter((v) => !v.me).length < 1) return null;
+  if (videos.length === 0) return null;
   return (
     <div className="video-bar">
       {videos.map((v) => (

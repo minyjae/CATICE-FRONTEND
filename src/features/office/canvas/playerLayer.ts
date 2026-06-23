@@ -37,7 +37,11 @@ function makeLabel(name: string): Text {
   });
 }
 
-export function createPlayerLayer(canvas: HTMLCanvasElement) {
+interface PlayerLayerOpts {
+  onPlayerClick?: (id: string) => void; // คลิก avatar คนอื่น → เชิญเข้าสาย
+}
+
+export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOpts = {}) {
   const app = new Application();
   const entries = new Map<string, Entry>();
   let textures: Record<AnimName, Texture[]> | null = null;
@@ -83,6 +87,10 @@ export function createPlayerLayer(canvas: HTMLCanvasElement) {
   function createEntry(p: Player): Entry {
     const sprite = new AnimatedSprite(textures!.idle);
     sprite.anchor.set(0.5, 0.9); // เท้าอยู่ใกล้กึ่งกลาง cell
+    // คลิกตัวละคร → เชิญเข้าสาย (Office จะกรองตัวเอง/peer เดิมออกเอง)
+    sprite.eventMode = "static";
+    sprite.cursor = "pointer";
+    sprite.on("pointertap", () => opts.onPlayerClick?.(p.id));
     sprite.animationSpeed = SPRITE.anims.idle.fps / 60;
     sprite.scale.set(baseScale);
     sprite.x = cellCenterX(p.x);

@@ -35,23 +35,36 @@ interface KanbanBoardProps {
 export default function KanbanBoard({ boards, tasks, users = [], send, myId, onClose }: KanbanBoardProps) {
   const [boardId, setBoardId] = useState<string | null>(null); // null = หน้ารายการบอร์ด
   const [draft, setDraft] = useState<Draft | null>(null); // null = ปิดฟอร์มการ์ด
+  const [boardDraft, setBoardDraft] = useState<{ id?: string; name: string } | null>(null); // สร้าง/เปลี่ยนชื่อบอร์ด
+  const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null); // ยืนยันการลบ
 
   // บอร์ดที่เปิดอยู่ — ถ้าโดนลบไปแล้ว (broadcast) จะกลายเป็น undefined → ตกกลับหน้ารายการเอง
   const board = boardId ? boards[boardId] : null;
   // map id → ชื่อ ใช้แสดงบนการ์ดแทน id ดิบ ๆ
   const nameById: Record<string, string> = Object.fromEntries(users.map((u) => [u.id, u.name]));
 
-  // ----- board actions -----
-  const createBoard = () => {
-    const name = window.prompt("ชื่อบอร์ดใหม่")?.trim();
-    if (name) send("board_create", { name });
-  };
-  const renameBoard = (b: Board) => {
-    const name = window.prompt("เปลี่ยนชื่อบอร์ด", b.name)?.trim();
-    if (name && name !== b.name) send("board_rename", { id: b.id, name });
-  };
-  const deleteBoard = (b: Board) => {
-    if (window.confirm(`ลบบอร์ด "${b.name}"?\nการ์ดทั้งหมดในบอร์ดนี้จะถูกลบด้วย`)) send("board_delete", { id: b.id });
+  // ----- board actions (เปิด modal แทน prompt/confirm) -----
+  const createBoard = () => setBoardDraft({ name: "" });
+  const renameBoard = (b: Board) => setBoardDraft({ id: b.id, name: b.name });
+  function submitBoard(e: FormEvent) {
+    e.preventDefault();
+    if (!boardDraft) return;
+    const name = boardDraft.name.trim();
+    if (!name) return;
+    if (boardDraft.id) send("board_rename", { id: boardDraft.id, name });
+    else send("board_create", { name });
+    setBoardDraft(null);
+  }
+  const deleteBoard = (b: Board) =>
+    setConfirm({
+      message: `ลบบอร์ด “${b.name}” และการ์ดทั้งหมดในบอร์ดนี้?`,
+      onConfirm: () => send("board_delete", { id: b.id }),
+    });
+  const requestDeleteTask = (t: Task) =>
+    setConfirm({ message: `ลบการ์ด “${t.title}”?`, onConfirm: () => send("task_delete", { id: t.id }) });
+  const runConfirm = () => {
+    confirm?.onConfirm();
+    setConfirm(null);
   };
 
   // ----- task draft -----
@@ -111,9 +124,18 @@ export default function KanbanBoard({ boards, tasks, users = [], send, myId, onC
             </button>
           </div>
 
-          <div className="board-list">
-            {list.length === 0 && <div className="muted-sm">ยังไม่มีบอร์ด — กด “สร้างบอร์ด” เพื่อเริ่ม</div>}
-            {list.map((b) => {
+          {list.length === 0 ? (
+            <div className="board-empty">
+              <div className="board-empty-icon">📋</div>
+              <div className="board-empty-title">ยังไม่มีบอร์ด</div>
+              <div className="board-empty-sub">เริ่มจัดงานของทีมด้วยบอร์ดแรกของคุณ</div>
+              <button className="submit-sm" onClick={createBoard}>
+                + สร้างบอร์ด
+              </button>
+            </div>
+          ) : (
+            <div className="board-list">
+              {list.map((b) => {
               const count = Object.values(tasks).filter((t) => t.board_id === b.id).length;
               return (
                 <div key={b.id} className="board-list-item">
@@ -130,7 +152,16 @@ export default function KanbanBoard({ boards, tasks, users = [], send, myId, onC
                 </div>
               );
             })}
-          </div>
+            </div>
+          )}
+
+          <BoardFormModal
+            draft={boardDraft}
+            onChange={(name) => setBoardDraft((d) => (d ? { ...d, name } : d))}
+            onCancel={() => setBoardDraft(null)}
+            onSubmit={submitBoard}
+          />
+          <ConfirmModal data={confirm} onCancel={() => setConfirm(null)} onConfirm={runConfirm} />
         </div>
       </div>
     );
@@ -180,7 +211,7 @@ export default function KanbanBoard({ boards, tasks, users = [], send, myId, onC
                       myId={myId}
                       nameById={nameById}
                       onEdit={() => openEdit(t)}
-                      onDelete={() => send("task_delete", { id: t.id })}
+                      onDelete={() => requestDeleteTask(t)}
                       onPrev={() => move(t, PREV[status])}
                       onNext={() => move(t, NEXT[status])}
                       hasPrev={!!PREV[status]}
@@ -192,6 +223,8 @@ export default function KanbanBoard({ boards, tasks, users = [], send, myId, onC
             );
           })}
         </div>
+
+        <ConfirmModal data={confirm} onCancel={() => setConfirm(null)} onConfirm={runConfirm} />
       </div>
 
       {draft && (
@@ -272,6 +305,72 @@ function Card({ task, mine, myId, nameById, onEdit, onDelete, onPrev, onNext, ha
         <button onClick={onNext} disabled={!hasNext} title="ย้ายขวา">
           ▶
         </button>
+      </div>
+    </div>
+  );
+}
+
+// modal สร้าง/เปลี่ยนชื่อบอร์ด (แทน window.prompt)
+function BoardFormModal({
+  draft,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  draft: { id?: string; name: string } | null;
+  onChange: (name: string) => void;
+  onCancel: () => void;
+  onSubmit: (e: FormEvent) => void;
+}) {
+  if (!draft) return null;
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <form className="modal-box" onClick={(e) => e.stopPropagation()} onSubmit={onSubmit}>
+        <h3>{draft.id ? "เปลี่ยนชื่อบอร์ด" : "สร้างบอร์ดใหม่"}</h3>
+        <input
+          className="modal-input"
+          value={draft.name}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="ชื่อบอร์ด"
+          autoFocus
+        />
+        <div className="form-actions">
+          <button type="button" className="ghost" onClick={onCancel}>
+            ยกเลิก
+          </button>
+          <button type="submit" className="submit-sm">
+            บันทึก
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// modal ยืนยันการลบ (แทน window.confirm) — ใช้ทั้งลบบอร์ดและลบการ์ด
+function ConfirmModal({
+  data,
+  onCancel,
+  onConfirm,
+}: {
+  data: { message: string } | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!data) return null;
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="confirm-icon">🗑</div>
+        <div className="confirm-msg">{data.message}</div>
+        <div className="form-actions">
+          <button className="ghost" onClick={onCancel}>
+            ยกเลิก
+          </button>
+          <button className="btn-danger" onClick={onConfirm}>
+            ลบ
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -116,13 +116,26 @@ export function createVideoController({ playersRef, myIdRef, send, setVideos }: 
     Object.keys(peers).forEach(endCall);
   }
 
+  // ออกจากสายทั้งหมด + ปิดกล้อง/ไมค์ (วางสายแบบตั้งใจ) — ต่างจาก endAllCalls ที่คงกล้องไว้
+  function leaveCall(): void {
+    endAllCalls();
+    if (localStream) {
+      localStream.getTracks().forEach((t) => t.stop());
+      localStream = null;
+    }
+    setVideos([]);
+  }
+
+  // เปิดกล้อง/ไมค์ + โชว์ tile ตัวเอง (ใช้ตอน "เริ่มวิดีโอ" ก่อนเชิญใคร)
+  const openCamera = () => ensureLocalStream();
+
   // ปิดทุกสาย + ปิดกล้อง/ไมค์ ตอน unmount
   function destroy(): void {
     endAllCalls();
     if (localStream) localStream.getTracks().forEach((t) => t.stop());
   }
 
-  return { handleSignal, endCall, endAllCalls, syncProximity, destroy };
+  return { handleSignal, startCall, openCamera, endCall, endAllCalls, leaveCall, syncProximity, destroy };
 }
 
 export type VideoController = ReturnType<typeof createVideoController>;

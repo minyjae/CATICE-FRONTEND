@@ -8,7 +8,8 @@ import VideoPanel from "../video/VideoPanel";
 import CallInvite from "../video/CallInvite";
 import KanbanBoard from "../kanban/KanbanBoard";
 import MembersPanel from "../members/MembersPanel";
-import type { Me, PublicUser, RoomName } from "../../shared/protocol";
+import SpritePicker from "./SpritePicker";
+import type { Me, PublicUser } from "../../shared/protocol";
 
 interface OfficeProps {
   me: Me;
@@ -26,6 +27,8 @@ export default function Office({ me, onLogout }: OfficeProps) {
     allMsgs,
     privateMsgs,
     onlineIds,
+    inCallIds,
+    playerRooms,
     videos,
     status,
     myId,
@@ -42,13 +45,14 @@ export default function Office({ me, onLogout }: OfficeProps) {
     send,
     sendChat,
     setTyping,
-    switchRoom,
+    setMySprite,
   } = useRoom({
     room: "lobby",
     displayName,
   });
   const inCall = videos.some((v) => v.me); // "อยู่ในสาย" = มี tile กล้องตัวเอง
   const [boardOpen, setBoardOpen] = useState(false);
+  const [spritePickerOpen, setSpritePickerOpen] = useState(false);
   const [users, setUsers] = useState<PublicUser[]>([]); // user ที่สมัครทั้งหมด → selector มอบหมาย task + แชตส่วนตัว
   // คลิกสมาชิก → ขอเปิดแท็บแชตส่วนตัวกับคนนั้น (n = nonce ให้เปิดซ้ำคนเดิมได้)
   const [dmRequest, setDmRequest] = useState<{ id: string; n: number } | null>(null);
@@ -70,14 +74,7 @@ export default function Office({ me, onLogout }: OfficeProps) {
       <div className="topbar">
         <span className="brand">🐱</span>
         <span className="brand-title"> Catice</span>
-        <span className="room-badge">{room}</span>
-        <select className="room-select" value={room} onChange={(e) => switchRoom(e.target.value as RoomName)}>
-          {ROOMS.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+        <span className="room-badge">{ROOMS.find(([v]) => v === room)?.[1] ?? room}</span>
         <span className="spacer" />
 
         {/* โหมดสาย: Invite (เชิญ+ยินยอม) / Auto (proximity เดิม) */}
@@ -113,6 +110,9 @@ export default function Office({ me, onLogout }: OfficeProps) {
           <span className="dot" />
           {displayName} · {ROLE_LABEL[me.role] || me.role}
         </span>
+        <button className="ghost" onClick={() => setSpritePickerOpen(true)}>
+          🎭 ตัวละคร
+        </button>
         <button className="ghost" onClick={logout}>
           ออกจากระบบ
         </button>
@@ -132,7 +132,7 @@ export default function Office({ me, onLogout }: OfficeProps) {
         </div>
 
         <div className="side">
-          <MembersPanel users={users} myId={myId} onSelect={openDm} />
+          <MembersPanel users={users} myId={myId} onlineIds={onlineIds} inCallIds={inCallIds} playerRooms={playerRooms} onSelect={openDm} />
           <ChatPanel
             roomMsgs={roomMsgs}
             allMsgs={allMsgs}
@@ -152,6 +152,10 @@ export default function Office({ me, onLogout }: OfficeProps) {
       )}
 
       <CallInvite incoming={incomingInvites} users={users} onAccept={acceptInvite} onReject={rejectInvite} />
+
+      {spritePickerOpen && (
+        <SpritePicker onSelect={setMySprite} onClose={() => setSpritePickerOpen(false)} />
+      )}
     </div>
   );
 }

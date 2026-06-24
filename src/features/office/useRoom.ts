@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ROOM_SCENE } from "./canvas/room";
 import { createPlayerLayer } from "./canvas/playerLayer";
+import type { SpriteKey } from "./canvas/spriteConfig";
 import { nextCell } from "./movement";
 import { PROXIMITY, FLOOR_ROW, GRID_W, GRID_H, doorAt, blockedAt } from "./constants";
 import type { Cell } from "./constants";
@@ -31,16 +32,20 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
 
   const typingRef = useRef(false);
 
-  // presence: ผู้ใช้ที่ออนไลน์ "เท่าที่เรารับรู้" = ผู้เล่นในห้องเดียวกัน (backend ไม่ส่ง presence ข้ามห้อง)
-  // เก็บใน ref + mirror เป็น state เฉพาะตอนสมาชิกเปลี่ยนจริง (กัน re-render ทุกก้าวเดิน)
-  const onlineRef = useRef<Set<string>>(new Set());
+  // กันแชตซ้ำ: backend ส่งประวัติตอน join (mid เดียวกับ live) → เก็บ mid ที่เคยเห็นไว้ dedupe
+  const seenMidsRef = useRef<Set<string>>(new Set());
 
   // video controller (เก็บใน ref เพื่อให้ handler นอก effect เรียกได้) + โหมดสาย
   const videoCtrlRef = useRef<VideoController | null>(null);
   const modeRef = useRef<"invite" | "auto">("invite");
+  const playerLayerRef = useRef<ReturnType<typeof createPlayerLayer> | null>(null);
 
   const [room, setRoom] = useState<RoomName>(initialRoom);
-  const [onlineIds, setOnlineIds] = useState<string[]>([]);
+  // presence จาก server (ข้ามห้อง — source of truth): userId → {online, in_call}
+  // เก็บเฉพาะคนที่ online (offline → ลบทิ้ง) → onlineIds = keys
+  const [presence, setPresence] = useState<Record<string, { online: boolean; in_call: boolean }>>({});
+  // ห้องที่แต่ละ user อยู่ปัจจุบัน: อัปจาก join (ห้องนี้) + presence.room (ข้ามห้อง จาก backend)
+  const [playerRooms, setPlayerRooms] = useState<Record<string, RoomName>>({});
   const [videoMode, setVideoModeState] = useState<"invite" | "auto">("invite");
   const [incomingInvites, setIncomingInvites] = useState<string[]>([]); // คนที่ชวนเรา (รอตอบ)
   const [outgoingInvites, setOutgoingInvites] = useState<string[]>([]); // คนที่เราชวน (รอเขาตอบ)
@@ -78,21 +83,6 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
     });
     videoCtrlRef.current = video;
 
-    // presence helpers — mirror state เฉพาะตอนเซ็ตสมาชิกเปลี่ยนจริง
-    const markOnline = (id: string) => {
-      if (!onlineRef.current.has(id)) {
-        onlineRef.current.add(id);
-        setOnlineIds([...onlineRef.current]);
-      }
-    };
-    const markOffline = (id: string) => {
-      if (onlineRef.current.delete(id)) setOnlineIds([...onlineRef.current]);
-    };
-    const resetOnline = (ids: string[]) => {
-      onlineRef.current = new Set(ids);
-      setOnlineIds(ids);
-    };
-
     // =========================
     // WS EVENTS
     // =========================
@@ -111,7 +101,7 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
           if (env.payload.room !== roomRef.current) {
             playersRef.current = {};
             video.endAllCalls();
-            resetOnline([]); // ออกจากห้องเก่า → presence เริ่มนับใหม่จากคนในห้องใหม่
+            // ไม่ล้าง presence ตอนสลับห้อง — presence เป็น global (server เป็น source of truth)
             setIncomingInvites([]); // คำเชิญของห้องเก่าถือเป็นโมฆะ
             setOutgoingInvites([]);
             // ไม่ล้างแชต/board/task ตอนสลับห้อง — แชตห้องเก็บแยกต่อห้อง, board/task เป็น global
@@ -128,7 +118,6 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
           const y = Math.max(FLOOR_ROW, Math.min(GRID_H - 1, door ? door.y : env.payload.y));
 
           playersRef.current[id] = { id, name: displayName, x, y };
-          markOnline(id);
 
           // ส่งชื่อซ้ำ (เหมือน flow ตอนต่อครั้งแรก) → คนในห้องนี้ถึงจะเห็นเรา
           send("join", { name: displayName });
@@ -139,19 +128,47 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
         }
 
         case "join":
+          playersRef.current[env.payload.id] = env.payload;
+          // บันทึกว่า player นี้อยู่ห้องเดียวกับเรา
+          setPlayerRooms((p) => ({ ...p, [env.payload.id]: roomRef.current }));
+          break;
         case "move":
           playersRef.current[env.payload.id] = env.payload;
-          markOnline(env.payload.id);
           break;
 
         case "leave":
           delete playersRef.current[env.payload.id];
-          markOffline(env.payload.id);
           video.endCall(env.payload.id);
           break;
 
+        case "presence": {
+          // สถานะจาก server (ข้ามห้อง) — เก็บเฉพาะคน online, offline → ลบทิ้ง
+          const { id, online, in_call, room: pRoom } = env.payload;
+          setPresence((p) => {
+            if (!online) {
+              const copy = { ...p };
+              delete copy[id];
+              return copy;
+            }
+            return { ...p, [id]: { online, in_call } };
+          });
+          if (!online) {
+            setPlayerRooms((p) => { const c = { ...p }; delete c[id]; return c; });
+          } else if (pRoom) {
+            setPlayerRooms((p) => ({ ...p, [id]: pRoom }));
+          }
+          break;
+        }
+
         case "chat": {
-          const msg: ChatMsg = { ...env.payload, t: Date.now() };
+          // dedupe ด้วย mid (ประวัติตอน join ส่ง mid เดียวกับ live → กันข้อความซ้ำ)
+          const mid = env.payload.mid;
+          if (mid) {
+            if (seenMidsRef.current.has(mid)) break;
+            seenMidsRef.current.add(mid);
+          }
+          // ใช้เวลา server (ts วินาที → ms) ถ้ามี ไม่งั้น now
+          const msg: ChatMsg = { ...env.payload, t: env.payload.ts ? env.payload.ts * 1000 : Date.now() };
           if (msg.scope === "all") {
             setAllMsgs((m) => [...m, msg]);
           } else if (msg.scope === "private") {
@@ -249,12 +266,13 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
         // ล้าง state ทั้งหมด รอ snapshot ใหม่ตอนต่อติด (upsert ตาม id จึงปลอดภัย, กัน ghost ค้าง)
         playersRef.current = {};
         video.endAllCalls();
-        resetOnline([]);
+        setPresence({}); // presence จะมาใหม่จาก snapshot ตอน join
         setIncomingInvites([]);
         setOutgoingInvites([]);
         setBoards({});
         setTasks({});
-        // แชต ephemeral — หลุดแล้วเริ่มใหม่ (ไม่มี snapshot แชตตอน join)
+        // แชต: ล้างของเดิม + เคลียร์ mid ที่เคยเห็น → backend ส่งประวัติกลับมาตอน join (repopulate)
+        seenMidsRef.current = new Set();
         setRoomMsgsByRoom({});
         setAllMsgs([]);
         setPrivateMsgs({});
@@ -290,7 +308,13 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
       const door = doorAt(roomRef.current, cell.x, cell.y);
 
       if (door) {
-        switchRoom(door.to, door.spawn);
+        // ประตูแนวตั้ง (x1===x2, ซ้าย/ขวา) → พา y ไป, x ใช้ฝั่งตรงข้าม
+        // ประตูแนวนอน (canteen บน/ล่าง)  → พา x ไป, y ใช้ฝั่งตรงข้าม
+        const isVertical = door.x1 === door.x2;
+        switchRoom(door.to, {
+          x: isVertical ? door.spawn.x : cell.x,
+          y: isVertical ? cell.y : door.spawn.y,
+        });
 
         return;
       }
@@ -324,6 +348,7 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
     const playerLayer = pixiCanvasRef.current
       ? createPlayerLayer(pixiCanvasRef.current, { onPlayerClick: invite })
       : null;
+    playerLayerRef.current = playerLayer;
 
     let raf = 0;
 
@@ -387,6 +412,24 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
       );
     }
   };
+
+  // =========================
+  // PRESENCE (จาก server) + รายงานสถานะ in-call ของเราเอง
+  // =========================
+
+  // onlineIds / inCallIds derive จาก presence map (server เป็น source of truth ข้ามห้อง)
+  const onlineIds = Object.keys(presence);
+  const inCallIds = onlineIds.filter((id) => presence[id].in_call);
+
+  // เรา in-call เมื่อมี tile กล้องตัวเอง → รายงาน server ตอนสถานะเปลี่ยน (เปิด/ปิดวิดีโอ)
+  const inCall = videos.some((v) => v.me);
+  const prevInCallRef = useRef(false);
+  useEffect(() => {
+    if (inCall === prevInCallRef.current) return;
+    prevInCallRef.current = inCall;
+    send("call_status", { in_call: inCall });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inCall]);
 
   // =========================
   // VIDEO CALL (เปิดสายเอง → เชิญ → ปลายทางยินยอม)
@@ -464,6 +507,8 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
     send("switch_room", { room: next });
   }
 
+  const setMySprite = (key: SpriteKey) => playerLayerRef.current?.setMySprite(key);
+
   return {
     canvasRef,
     pixiCanvasRef,
@@ -477,6 +522,8 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
     allMsgs,
     privateMsgs,
     onlineIds,
+    inCallIds,
+    playerRooms,
     videoMode,
     setVideoMode,
     incomingInvites,
@@ -489,5 +536,6 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
     sendChat,
     setTyping,
     switchRoom,
+    setMySprite,
   };
 }

@@ -36,6 +36,7 @@ export interface Door {
   x2: number;
   y1: number;
   y2: number;
+  y3?: number;
   to: RoomName;
   spawn: Cell;
 }
@@ -43,17 +44,17 @@ export interface Door {
 // ประตูของแต่ละห้อง — โซนต้องตรงกับ box ประตูที่วาดใน canvas/room.ts
 export const DOORS: Partial<Record<RoomName, Door[]>> = {
   lobby: [
-    { x1: 0, x2: 0, y1: 9, y2: 10, to: "meeting_room", spawn: { x: 22, y: 9 } },
-    { x1: 23, x2: 23, y1: 9, y2: 10, to: "office", spawn: { x: 1, y: 9 } },
+    { x1: 0, x2: 0, y1: 9, y2: 10, y3: 11, to: "meeting_room", spawn: { x: 22, y: 9 } },
+    { x1: 23, x2: 23, y1: 9, y2: 10, y3: 11, to: "office", spawn: { x: 1, y: 9 } },
     // ประตูบนซ้าย → Canteen: hitbox อยู่ "ในผนัง" (แถว 2, คอลัมน์ 1–2)
     // เดินจากแถว 3 ชนขึ้นผนังเข้าประตูได้ (onKey เช็คประตูก่อนบล็อกผนัง)
     // → ไปโผล่ "ล่างซ้าย" ของ canteen (เหนือประตูกลับ) คอลัมน์ตรงกัน
     { x1: 1, x2: 2, y1: 2, y2: 2, to: "canteen", spawn: { x: 2, y: 14 } },
   ],
 
-  meeting_room: [{ x1: 23, x2: 23, y1: 9, y2: 10, to: "lobby", spawn: { x: 1, y: 9 } }],
+  meeting_room: [{ x1: 23, x2: 23, y1: 9, y2: 10, y3: 11, to: "lobby", spawn: { x: 1, y: 9 } }],
 
-  office: [{ x1: 0, x2: 0, y1: 9, y2: 10, to: "lobby", spawn: { x: 22, y: 9 } }],
+  office: [{ x1: 0, x2: 0, y1: 9, y2: 10, y3: 11, to: "lobby", spawn: { x: 22, y: 9 } }],
 
   // ประตูล่างซ้าย กลับ Lobby (แถวล่างสุด y=15, คอลัมน์ 1–2 ตรงกับประตูที่เข้ามา)
   // → ไปโผล่ "ใต้" ประตู canteen ของ lobby (FLOOR_ROW+1=4) ไม่ทับช่องประตู
@@ -62,7 +63,9 @@ export const DOORS: Partial<Record<RoomName, Door[]>> = {
 
 // คืน door ถ้าช่อง (x,y) อยู่ในโซนประตูของห้อง room, ไม่ใช่คืน null
 export function doorAt(room: RoomName, x: number, y: number): Door | null {
-  return (DOORS[room] ?? []).find((d) => x >= d.x1 && x <= d.x2 && y >= d.y1 && y <= d.y2) ?? null;
+  return (DOORS[room] ?? []).find((d) =>
+    x >= d.x1 && x <= d.x2 && y >= d.y1 && y <= (d.y3 ?? d.y2)
+  ) ?? null;
 }
 
 // =========================

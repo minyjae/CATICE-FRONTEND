@@ -8,7 +8,7 @@
 
 export type RoomName = "lobby" | "meeting_room" | "office" | "canteen";
 
-export type Role = "developer" | "pm" | "po" | "cto" | "uxui";
+export type Role = "developer" | "pm" | "po" | "cto" | "uxui" | "hr";
 
 export type TaskStatus = "todo" | "doing" | "done";
 
@@ -65,6 +65,8 @@ export type ChatScope = "room" | "all" | "private";
 // protocol.ChatBroadcast — แชตขาออกจาก server (มี id/name ของผู้พูด)
 // to มีเฉพาะ scope=private (= userId ปลายทาง)
 export interface ChatBroadcast {
+  mid: string; // message id — ใช้ dedupe (ข้อความ live ที่เคยรับ vs ที่มาซ้ำในประวัติตอน reconnect)
+  ts: number; // unix seconds — เวลาส่งจาก server
   scope: ChatScope;
   id: string;
   name: string;
@@ -90,6 +92,7 @@ export type ServerMsg =
   | { type: "join"; payload: Player }
   | { type: "move"; payload: Player }
   | { type: "leave"; payload: { id: string } }
+  | { type: "presence"; payload: { id: string; online: boolean; in_call: boolean; room?: RoomName } }
   | { type: "chat"; payload: ChatBroadcast }
   | { type: "signal"; payload: { from: string; data: SignalData } }
   | { type: "object"; payload: RoomObject }
@@ -114,6 +117,8 @@ export interface ClientMsgMap {
   join: { name: string };
   move: { x: number; y: number };
   switch_room: { room: RoomName };
+  // รายงานสถานะกล้องตัวเอง (online ↔ in-call) → server broadcast presence ให้คนอื่นเห็น busy
+  call_status: { in_call: boolean };
   // ส่งแชต: ละ scope = ห้องนี้; scope=private ต้องมี to (userId ปลายทาง)
   chat: { scope?: ChatScope; to?: string; text: string };
   signal: { to: string; data: SignalData };

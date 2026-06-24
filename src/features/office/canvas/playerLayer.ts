@@ -1,27 +1,37 @@
 // เลเยอร์ผู้เล่นด้วย PixiJS — วาด avatar เป็น sprite animation บน canvas โปร่งใส
 // ที่ซ้อนทับ canvas ห้อง (2D) แบบ pixel-perfect. เป็น factory ล้วน ๆ ไม่พึ่ง React
-// (รูปแบบเดียวกับ createVideoController) ให้ lifecycle ของ Pixi คุมง่าย
 import { Application, Assets, AnimatedSprite, Texture, Text } from "pixi.js";
 import type { Player } from "../../../shared/protocol";
 import { CELL, CANVAS_W, CANVAS_H } from "../constants";
-import { SPRITE, type AnimName } from "./spriteConfig";
+import {
+  SPRITE_PRESETS, SPRITE_KEYS, SPRITE_CONFIG,
+  getMySprite, saveMySprite,
+  type SpriteKey, type AnimName,
+} from "./spriteConfig";
 
 interface Entry {
   sprite: AnimatedSprite;
   label: Text;
+  spriteKey: SpriteKey;
   prevX: number;
   prevY: number;
-  facing: 1 | -1; // 1 = ขวา (ภาพต้นฉบับ), -1 = ซ้าย (พลิกแนวนอน)
-  lastMove: number; // performance.now() ครั้งล่าสุดที่ขยับ
+  facing: 1 | -1;
+  lastMove: number;
   anim: AnimName;
-  targetX: number; // พิกัด px เป้าหมาย (กึ่งกลาง cell) → lerp เข้าหา
+  targetX: number;
   targetY: number;
 }
 
-const ANIM_NAMES = Object.keys(SPRITE.anims) as AnimName[];
+type AllTextures = Record<SpriteKey, Record<AnimName, Texture[]>>;
 
 const cellCenterX = (x: number) => x * CELL + CELL / 2;
 const cellCenterY = (y: number) => y * CELL + CELL / 2;
+
+// sprite ของคนอื่น: hash id → preset (deterministic, ไม่สุ่มใหม่ทุก render)
+function spriteKeyForOther(id: string): SpriteKey {
+  const hash = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return SPRITE_KEYS[hash % SPRITE_KEYS.length];
+}
 
 function makeLabel(name: string): Text {
   return new Text({
@@ -38,16 +48,17 @@ function makeLabel(name: string): Text {
 }
 
 interface PlayerLayerOpts {
-  onPlayerClick?: (id: string) => void; // คลิก avatar คนอื่น → เชิญเข้าสาย
+  onPlayerClick?: (id: string) => void;
 }
 
 export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOpts = {}) {
   const app = new Application();
   const entries = new Map<string, Entry>();
-  let textures: Record<AnimName, Texture[]> | null = null;
-  let baseScale = 1; // scale ให้ตัวละครสูง = SPRITE.drawHeight
+  let allTextures: AllTextures | null = null;
+  let baseScale = 1;
   let ready = false;
   let destroyed = false;
+  let myId = "";
 
   (async () => {
     await app.init({
@@ -58,25 +69,36 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
       antialias: false,
     });
 
-    // โหลดไฟล์ PNG แยกของแต่ละเฟรม (ทุก anim รวมกันทีเดียว)
-    const out = {} as Record<AnimName, Texture[]>;
+    // โหลดทุก preset พร้อมกัน
+    const out = {} as AllTextures;
     try {
-      for (const name of ANIM_NAMES) {
-        out[name] = (await Promise.all(SPRITE.anims[name].frames.map((f) => Assets.load(f)))) as Texture[];
+      for (const key of SPRITE_KEYS) {
+        const preset = SPRITE_PRESETS[key];
+        const animOut = {} as Record<AnimName, Texture[]>;
+        for (const animName of (["idle", "run"] as AnimName[])) {
+          animOut[animName] = (await Promise.all(
+            preset.anims[animName].frames.map((f: string) => Assets.load(f))
+          )) as Texture[];
+        }
+        out[key] = animOut;
       }
     } catch {
-      // ยังไม่มีไฟล์ sprite → ไม่ render avatar (กัน unhandled rejection)
-      console.warn("[playerLayer] โหลดไฟล์ sprite ไม่ได้ — วาง player_idle.png / player_walk1.png / player_walk2.png ที่ public/sprites/");
+      console.warn("[playerLayer] โหลด sprite ไม่ได้ — ตรวจไฟล์ใน public/sprites/");
       return;
     }
 
-    if (SPRITE.pixelated) {
-      for (const arr of Object.values(out)) for (const t of arr) t.source.scaleMode = "nearest";
+    if (SPRITE_CONFIG.pixelated) {
+      for (const presetTex of Object.values(out)) {
+        for (const arr of Object.values(presetTex)) {
+          for (const t of arr as Texture[]) t.source.scaleMode = "nearest";
+        }
+      }
     }
-    textures = out;
-    baseScale = SPRITE.drawHeight / out.idle[0].height; // คุมขนาดจากเฟรม idle
 
-    // ถ้าโดน destroy ระหว่างรอ init/load → เก็บกวาดทันที
+    allTextures = out;
+    // คำนวณ baseScale จาก idle frame ของ preset แรก (ทุก preset ควรใช้ขนาดเดียวกัน)
+    baseScale = SPRITE_CONFIG.drawHeight / out.player.idle[0].height;
+
     if (destroyed) {
       app.destroy({ removeView: false }, { children: true });
       return;
@@ -84,14 +106,18 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
     ready = true;
   })();
 
+  function getSpriteKey(id: string): SpriteKey {
+    return id === myId ? getMySprite() : spriteKeyForOther(id);
+  }
+
   function createEntry(p: Player): Entry {
-    const sprite = new AnimatedSprite(textures!.idle);
-    sprite.anchor.set(0.5, 0.9); // เท้าอยู่ใกล้กึ่งกลาง cell
-    // คลิกตัวละคร → เชิญเข้าสาย (Office จะกรองตัวเอง/peer เดิมออกเอง)
+    const key = getSpriteKey(p.id);
+    const sprite = new AnimatedSprite(allTextures![key].idle);
+    sprite.anchor.set(0.5, 0.9);
     sprite.eventMode = "static";
     sprite.cursor = "pointer";
     sprite.on("pointertap", () => opts.onPlayerClick?.(p.id));
-    sprite.animationSpeed = SPRITE.anims.idle.fps / 60;
+    sprite.animationSpeed = SPRITE_PRESETS[key].anims.idle.fps / 60;
     sprite.scale.set(baseScale);
     sprite.x = cellCenterX(p.x);
     sprite.y = cellCenterY(p.y);
@@ -99,36 +125,29 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
 
     const label = makeLabel(p.name);
     label.anchor.set(0.5, 1);
-
     app.stage.addChild(sprite, label);
 
     return {
-      sprite,
-      label,
-      prevX: p.x,
-      prevY: p.y,
-      facing: 1,
-      lastMove: 0,
-      anim: "idle",
-      targetX: cellCenterX(p.x),
-      targetY: cellCenterY(p.y),
+      sprite, label, spriteKey: key,
+      prevX: p.x, prevY: p.y,
+      facing: 1, lastMove: 0, anim: "idle",
+      targetX: cellCenterX(p.x), targetY: cellCenterY(p.y),
     };
   }
 
-  function setAnim(e: Entry, name: AnimName) {
-    if (e.anim === name || !textures) return;
+  function applyAnim(e: Entry, name: AnimName) {
+    if (e.anim === name || !allTextures) return;
     e.anim = name;
-    e.sprite.textures = textures[name];
-    e.sprite.animationSpeed = SPRITE.anims[name].fps / 60;
+    e.sprite.textures = allTextures[e.spriteKey][name];
+    e.sprite.animationSpeed = SPRITE_PRESETS[e.spriteKey].anims[name].fps / 60;
     e.sprite.play();
   }
 
-  // เรียกทุกเฟรมจาก render loop ของ useRoom
-  function update(players: Record<string, Player>, myId: string | null) {
+  function update(players: Record<string, Player>, currentMyId: string | null) {
     if (!ready) return;
+    myId = currentMyId ?? "";
     const now = performance.now();
 
-    // ลบ sprite ของคนที่ไม่อยู่แล้ว (leave / สลับห้อง)
     for (const id of entries.keys()) {
       if (!players[id]) {
         const e = entries.get(id)!;
@@ -143,37 +162,43 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
       let e = entries.get(id);
       if (!e) {
         e = createEntry(p);
-        // ไฮไลต์ avatar ตัวเอง (เทียบ border ขาวของวงกลมเดิม)
         e.sprite.tint = id === myId ? 0xfff2c4 : 0xffffff;
         entries.set(id, e);
       }
 
-      // ตรวจการขยับจาก delta ตำแหน่ง (ใช้ได้กับทั้งตัวเอง + คนอื่น ไม่ต้องแก้ protocol)
       if (p.x !== e.prevX || p.y !== e.prevY) {
         const jump = Math.abs(p.x - e.prevX) + Math.abs(p.y - e.prevY);
-        if (p.x !== e.prevX) e.facing = p.x > e.prevX ? 1 : -1; // ขยับแนวตั้งคงทิศเดิม
+        if (p.x !== e.prevX) e.facing = p.x > e.prevX ? 1 : -1;
         e.lastMove = now;
         e.prevX = p.x;
         e.prevY = p.y;
         e.targetX = cellCenterX(p.x);
         e.targetY = cellCenterY(p.y);
-        // เดินปกติทีละ 1 ช่อง → ถ้ากระโดดไกล (เปลี่ยนห้อง/spawn) ให้ snap ทันที ไม่ลาก
         if (jump > 1) {
           e.sprite.x = e.targetX;
           e.sprite.y = e.targetY;
         }
       }
 
-      setAnim(e, now - e.lastMove < SPRITE.moveTimeoutMs ? "run" : "idle");
-      e.sprite.scale.x = baseScale * e.facing; // พลิกซ้าย/ขวา
-
-      // เดินนุ่ม ๆ: lerp เข้าหา cell เป้าหมาย แทนที่จะวาร์ป
+      applyAnim(e, now - e.lastMove < SPRITE_CONFIG.moveTimeoutMs ? "run" : "idle");
+      e.sprite.scale.x = baseScale * e.facing;
       e.sprite.x += (e.targetX - e.sprite.x) * 0.25;
       e.sprite.y += (e.targetY - e.sprite.y) * 0.25;
-
       e.label.x = e.sprite.x;
-      e.label.y = e.sprite.y - e.sprite.height * 0.9 - 2; // เหนือหัว (height = สูงจริง × scale)
+      e.label.y = e.sprite.y - e.sprite.height * 0.9 - 2;
     }
+  }
+
+  // เปลี่ยน sprite ของตัวเอง — บันทึก localStorage + อัป entry ทันที
+  function setMySprite(key: SpriteKey) {
+    saveMySprite(key);
+    const e = entries.get(myId);
+    if (!e || !allTextures) return;
+    e.spriteKey = key;
+    e.anim = "idle"; // reset เพื่อ force applyAnim ครั้งถัดไป
+    e.sprite.textures = allTextures[key].idle;
+    e.sprite.animationSpeed = SPRITE_PRESETS[key].anims.idle.fps / 60;
+    e.sprite.play();
   }
 
   function destroy() {
@@ -181,5 +206,5 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
     if (ready) app.destroy({ removeView: false }, { children: true });
   }
 
-  return { update, destroy };
+  return { update, destroy, setMySprite };
 }

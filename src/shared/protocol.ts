@@ -8,7 +8,9 @@
 
 export type RoomName = "lobby" | "meeting_room" | "office" | "canteen";
 
-export type Role = "developer" | "pm" | "po" | "cto" | "uxui";
+export type Role = "developer" | "pm" | "po" | "cto" | "uxui" | "hr";
+
+export type SpriteKey = "player" | "adventurer" | "soldier" | "cat";
 
 export type TaskStatus = "todo" | "doing" | "done";
 
@@ -18,6 +20,7 @@ export interface Player {
   name: string;
   x: number;
   y: number;
+  sprite?: SpriteKey;
 }
 
 // room.Object — วัตถุตกแต่งในห้อง
@@ -65,6 +68,8 @@ export type ChatScope = "room" | "all" | "private";
 // protocol.ChatBroadcast — แชตขาออกจาก server (มี id/name ของผู้พูด)
 // to มีเฉพาะ scope=private (= userId ปลายทาง)
 export interface ChatBroadcast {
+  mid: string; // message id — ใช้ dedupe (ข้อความ live ที่เคยรับ vs ที่มาซ้ำในประวัติตอน reconnect)
+  ts: number; // unix seconds — เวลาส่งจาก server
   scope: ChatScope;
   id: string;
   name: string;
@@ -90,6 +95,7 @@ export type ServerMsg =
   | { type: "join"; payload: Player }
   | { type: "move"; payload: Player }
   | { type: "leave"; payload: { id: string } }
+  | { type: "presence"; payload: { id: string; online: boolean; in_call: boolean; room?: RoomName } }
   | { type: "chat"; payload: ChatBroadcast }
   | { type: "signal"; payload: { from: string; data: SignalData } }
   | { type: "object"; payload: RoomObject }
@@ -97,6 +103,7 @@ export type ServerMsg =
   | { type: "call_accept"; payload: { from: string } }
   | { type: "call_reject"; payload: { from: string } }
   | { type: "call_cancel"; payload: { from: string } }
+  | { type: "sprite_change"; payload: { id: string; sprite: SpriteKey } }
   | { type: "board_create"; payload: Board }
   | { type: "board_rename"; payload: Board }
   | { type: "board_delete"; payload: { id: string } }
@@ -111,9 +118,12 @@ export type ServerMsgType = ServerMsg["type"];
 // map ชนิดข้อความ → payload เพื่อให้ send() ตรวจ payload ตาม type ได้
 
 export interface ClientMsgMap {
-  join: { name: string };
+  join: { name: string; sprite?: SpriteKey };
   move: { x: number; y: number };
+  sprite_change: { sprite: SpriteKey };
   switch_room: { room: RoomName };
+  // รายงานสถานะกล้องตัวเอง (online ↔ in-call) → server broadcast presence ให้คนอื่นเห็น busy
+  call_status: { in_call: boolean };
   // ส่งแชต: ละ scope = ห้องนี้; scope=private ต้องมี to (userId ปลายทาง)
   chat: { scope?: ChatScope; to?: string; text: string };
   signal: { to: string; data: SignalData };

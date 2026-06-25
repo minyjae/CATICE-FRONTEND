@@ -3,6 +3,10 @@
 import type { Me, PublicUser } from "../../shared/protocol";
 import { getToken, setToken, clearToken } from "./token";
 
+// base URL ของ backend — dev เว้นว่าง ("") → ยิง relative ผ่าน Vite proxy (same-origin)
+// prod (frontend คนละโดเมน เช่น Railway) ตั้ง VITE_API_URL = https://<backend-domain>
+const API = import.meta.env.VITE_API_URL ?? "";
+
 // App ลงทะเบียน handler ไว้ที่นี่ → โดน 401 ที่ไหนก็เด้งกลับหน้า login ที่เดียว
 let onUnauthorized: (() => void) | null = null;
 export function setOnUnauthorized(fn: () => void): void {
@@ -14,7 +18,7 @@ async function authFetch(url: string, opts: RequestInit = {}): Promise<Response>
   const t = getToken();
   const headers: Record<string, string> = { ...(opts.headers as Record<string, string>) };
   if (t) headers.Authorization = `Bearer ${t}`;
-  const res = await fetch(url, { ...opts, headers });
+  const res = await fetch(`${API}${url}`, { ...opts, headers });
   if (res.status === 401) {
     clearToken();
     onUnauthorized?.();
@@ -58,7 +62,7 @@ export function register(email: string, role: string, password: string) {
 export async function logout(): Promise<void> {
   clearToken();
   try {
-    await fetch("/logout", { method: "POST" });
+    await fetch(`${API}/logout`, { method: "POST" });
   } catch {
     /* ไม่เป็นไร — token ฝั่งเราลบแล้ว ถือว่า logout สำเร็จ */
   }
@@ -73,7 +77,7 @@ interface AuthResponse {
 // POST JSON แล้วคืน { ok, data } ให้ caller ตัดสินใจเรื่องข้อความ/flow เอง
 // login/register สำเร็จจะมี data.token (JWT) มาด้วย → เก็บไว้เลยที่นี่
 async function post(url: string, body: unknown): Promise<{ ok: boolean; data: AuthResponse }> {
-  const res = await fetch(url, {
+  const res = await fetch(`${API}${url}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

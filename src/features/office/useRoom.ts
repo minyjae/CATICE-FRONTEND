@@ -260,8 +260,12 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
     // (dev reload, เน็ตกระตุก). ย้ายห้องไม่ปิด socket จึงไม่กระทบ logic switch_room
     function connect() {
       const token = getToken();
+      // base = backend domain (prod: VITE_API_URL) หรือ same-origin (dev: ผ่าน Vite proxy)
+      // http→ws, https→wss อัตโนมัติ → ใช้ wss ได้เมื่อหน้าเว็บเป็น https
+      const apiBase = import.meta.env.VITE_API_URL || `${location.protocol}//${location.host}`;
+      const wsBase = apiBase.replace(/^http/, "ws");
       const ws = new WebSocket(
-        `ws://${location.host}/ws?room=${encodeURIComponent(roomRef.current)}` +
+        `${wsBase}/ws?room=${encodeURIComponent(roomRef.current)}` +
           (token ? `&token=${encodeURIComponent(token)}` : ""),
       );
       wsRef.current = ws;

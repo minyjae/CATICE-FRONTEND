@@ -23,4 +23,7 @@ export default defineConfig({
     outDir: "../Catice2/web",
     emptyOutDir: true,
   },
+  preview: {
+    allowedHosts: true,   // อนุญาต external host (Railway/EC2) — ใช้แค่ตอน vite preview
+  },
 });

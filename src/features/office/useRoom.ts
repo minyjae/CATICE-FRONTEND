@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ROOM_SCENE } from "./canvas/room";
 import { createPlayerLayer } from "./canvas/playerLayer";
+import { getMySprite } from "./canvas/spriteConfig";
 import type { SpriteKey } from "./canvas/spriteConfig";
 import { nextCell } from "./movement";
 import { PROXIMITY, FLOOR_ROW, GRID_W, GRID_H, doorAt, blockedAt } from "./constants";
@@ -120,10 +121,11 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
           playersRef.current[id] = { id, name: displayName, x, y };
 
           // ส่งชื่อซ้ำ (เหมือน flow ตอนต่อครั้งแรก) → คนในห้องนี้ถึงจะเห็นเรา
-          send("join", { name: displayName });
+          send("join", { name: displayName, sprite: getMySprite() });
 
-          // เข้าทางประตู → แจ้ง backend ว่าเรายืนหน้าประตู (ทับตำแหน่ง Redis + ให้คนอื่นเห็นตรงกัน)
-          if (door) send("move", { x, y });
+          // ส่ง move เสมอ: แก้กรณี backend เก็บตำแหน่งบนผนัง (y < FLOOR_ROW) ไว้ใน Redis
+          // เช่น user ใหม่ที่ยัง spawn ไม่ถูก → clamp แล้วต้องบอก backend ให้อัปเดตตำแหน่งจริง
+          send("move", { x, y });
           break;
         }
 
@@ -205,6 +207,14 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
         case "call_cancel":
           setIncomingInvites((p) => p.filter((x) => x !== env.payload.from));
           break;
+
+        case "sprite_change": {
+          const { id, sprite } = env.payload;
+          if (playersRef.current[id]) {
+            playersRef.current[id] = { ...playersRef.current[id], sprite };
+          }
+          break;
+        }
 
         case "board_create":
         case "board_rename":
@@ -507,7 +517,10 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
     send("switch_room", { room: next });
   }
 
-  const setMySprite = (key: SpriteKey) => playerLayerRef.current?.setMySprite(key);
+  const setMySprite = (key: SpriteKey) => {
+    playerLayerRef.current?.setMySprite(key);
+    send("sprite_change", { sprite: key });
+  };
 
   return {
     canvasRef,

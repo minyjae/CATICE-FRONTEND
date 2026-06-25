@@ -10,6 +10,8 @@ export type RoomName = "lobby" | "meeting_room" | "office" | "canteen";
 
 export type Role = "developer" | "pm" | "po" | "cto" | "uxui" | "hr";
 
+export type SpriteKey = "player" | "adventurer" | "soldier" | "cat";
+
 export type TaskStatus = "todo" | "doing" | "done";
 
 // room.Player — ผู้เล่นในห้อง (game state)
@@ -18,6 +20,7 @@ export interface Player {
   name: string;
   x: number;
   y: number;
+  sprite?: SpriteKey;
 }
 
 // room.Object — วัตถุตกแต่งในห้อง
@@ -100,6 +103,7 @@ export type ServerMsg =
   | { type: "call_accept"; payload: { from: string } }
   | { type: "call_reject"; payload: { from: string } }
   | { type: "call_cancel"; payload: { from: string } }
+  | { type: "sprite_change"; payload: { id: string; sprite: SpriteKey } }
   | { type: "board_create"; payload: Board }
   | { type: "board_rename"; payload: Board }
   | { type: "board_delete"; payload: { id: string } }
@@ -114,8 +118,9 @@ export type ServerMsgType = ServerMsg["type"];
 // map ชนิดข้อความ → payload เพื่อให้ send() ตรวจ payload ตาม type ได้
 
 export interface ClientMsgMap {
-  join: { name: string };
+  join: { name: string; sprite?: SpriteKey };
   move: { x: number; y: number };
+  sprite_change: { sprite: SpriteKey };
   switch_room: { room: RoomName };
   // รายงานสถานะกล้องตัวเอง (online ↔ in-call) → server broadcast presence ให้คนอื่นเห็น busy
   call_status: { in_call: boolean };

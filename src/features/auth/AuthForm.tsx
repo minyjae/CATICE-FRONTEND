@@ -98,6 +98,19 @@ export default function AuthForm({ onAuthed }: AuthFormProps) {
 
   return (
     <div className="auth-wrap">
+      <div className="cat-slide-bg" aria-hidden="true">
+        <div className="cat-grid-outer">
+          {Array.from({ length: 24 }, (_, row) => (
+            <div key={row} className="cat-track" style={{ animationDelay: `${-(row * 2)}s` }}>
+              {/* 70 cats = 10 reps × 7 — track width = 70×128 = 8960px
+                  translateX(-50%) = -4480px = exactly 5 periods (5×896px) → seamless */}
+              {Array.from({ length: 70 }, (_, i) => (
+                <img key={i} src={`/cat${(i % 7) + 1}.png`} alt="" />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
       <form className="card" onSubmit={submit}>
         <h1>🐱 Catice</h1>
         <div className="sub">Virtual Office · เดินคุยกันแบบ real-time</div>

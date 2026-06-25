@@ -6,8 +6,11 @@ import { CELL, CANVAS_W, CANVAS_H } from "../constants";
 import {
   SPRITE_PRESETS, SPRITE_KEYS, SPRITE_CONFIG,
   getMySprite, saveMySprite,
-  type SpriteKey, type AnimName,
+  CAT_FRAMES, CAT_SIT_TIMEOUT_MS,
+  type SpriteKey, type AnimName, type CatAnimKey,
 } from "./spriteConfig";
+
+type Direction = "down" | "up" | "left" | "right";
 
 interface Entry {
   sprite: AnimatedSprite;
@@ -16,13 +19,15 @@ interface Entry {
   prevX: number;
   prevY: number;
   facing: 1 | -1;
+  direction: Direction;
   lastMove: number;
-  anim: AnimName;
+  anim: AnimName | CatAnimKey;
   targetX: number;
   targetY: number;
 }
 
-type AllTextures = Record<SpriteKey, Record<AnimName, Texture[]>>;
+type AllTextures = Record<Exclude<SpriteKey, "cat">, Record<AnimName, Texture[]>>;
+type CatTextures = Record<CatAnimKey, Texture[]>;
 
 const cellCenterX = (x: number) => x * CELL + CELL / 2;
 const cellCenterY = (y: number) => y * CELL + CELL / 2;
@@ -47,6 +52,18 @@ function makeLabel(name: string): Text {
   });
 }
 
+// Cat directional idle mapping
+const IDLE_DIR_MAP: Record<Direction, CatAnimKey> = {
+  down: "idle_front", up: "idle_back", left: "idle_left", right: "idle_right",
+};
+
+function getCatAnimKey(e: Entry, now: number): CatAnimKey {
+  const elapsed = now - e.lastMove;
+  if (elapsed > CAT_SIT_TIMEOUT_MS) return "sit";
+  if (elapsed < SPRITE_CONFIG.moveTimeoutMs) return `walk_${e.direction}` as CatAnimKey;
+  return IDLE_DIR_MAP[e.direction];
+}
+
 interface PlayerLayerOpts {
   onPlayerClick?: (id: string) => void;
 }
@@ -55,7 +72,9 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
   const app = new Application();
   const entries = new Map<string, Entry>();
   let allTextures: AllTextures | null = null;
+  let catTextures: CatTextures | null = null;
   let baseScale = 1;
+  let catScale = 1;
   let ready = false;
   let destroyed = false;
   let myId = "";
@@ -69,22 +88,36 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
       antialias: false,
     });
 
-    // โหลดทุก preset พร้อมกัน
+    // โหลด preset ปกติ (player/adventurer/soldier)
     const out = {} as AllTextures;
     try {
       for (const key of SPRITE_KEYS) {
-        const preset = SPRITE_PRESETS[key];
+        if (key === "cat") continue;
+        const k = key as Exclude<SpriteKey, "cat">;
+        const preset = SPRITE_PRESETS[k];
         const animOut = {} as Record<AnimName, Texture[]>;
         for (const animName of (["idle", "run"] as AnimName[])) {
           animOut[animName] = (await Promise.all(
             preset.anims[animName].frames.map((f: string) => Assets.load(f))
           )) as Texture[];
         }
-        out[key] = animOut;
+        out[k] = animOut;
       }
     } catch {
       console.warn("[playerLayer] โหลด sprite ไม่ได้ — ตรวจไฟล์ใน public/sprites/");
       return;
+    }
+
+    // โหลด cat texture แยก (directional system)
+    const catOut = {} as CatTextures;
+    try {
+      for (const [animKey, spec] of Object.entries(CAT_FRAMES) as [CatAnimKey, typeof CAT_FRAMES[CatAnimKey]][]) {
+        catOut[animKey] = (await Promise.all(
+          spec.frames.map((f) => Assets.load(f))
+        )) as Texture[];
+      }
+    } catch {
+      console.warn("[playerLayer] โหลด cat sprite ไม่ได้ — ตรวจไฟล์ใน public/sprites/cat_*/");
     }
 
     if (SPRITE_CONFIG.pixelated) {
@@ -93,11 +126,17 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
           for (const t of arr as Texture[]) t.source.scaleMode = "nearest";
         }
       }
+      for (const arr of Object.values(catOut)) {
+        for (const t of arr as Texture[]) t.source.scaleMode = "nearest";
+      }
     }
 
     allTextures = out;
-    // คำนวณ baseScale จาก idle frame ของ preset แรก (ทุก preset ควรใช้ขนาดเดียวกัน)
+    catTextures = catOut;
     baseScale = SPRITE_CONFIG.drawHeight / out.player.idle[0].height;
+    if (catOut.idle_front?.[0]) {
+      catScale = SPRITE_CONFIG.drawHeight / catOut.idle_front[0].height;
+    }
 
     if (destroyed) {
       app.destroy({ removeView: false }, { children: true });
@@ -106,19 +145,28 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
     ready = true;
   })();
 
-  function getSpriteKey(id: string): SpriteKey {
-    return id === myId ? getMySprite() : spriteKeyForOther(id);
+  function getSpriteKey(p: Player): SpriteKey {
+    if (p.id === myId) return getMySprite();
+    return p.sprite ?? spriteKeyForOther(p.id);
   }
 
   function createEntry(p: Player): Entry {
-    const key = getSpriteKey(p.id);
-    const sprite = new AnimatedSprite(allTextures![key].idle);
+    const key = getSpriteKey(p);
+    const isCat = key === "cat";
+
+    const initTextures = isCat
+      ? (catTextures?.idle_front ?? allTextures!.player.idle)
+      : allTextures![key as Exclude<SpriteKey, "cat">].idle;
+
+    const sprite = new AnimatedSprite(initTextures);
     sprite.anchor.set(0.5, 0.9);
     sprite.eventMode = "static";
     sprite.cursor = "pointer";
     sprite.on("pointertap", () => opts.onPlayerClick?.(p.id));
-    sprite.animationSpeed = SPRITE_PRESETS[key].anims.idle.fps / 60;
-    sprite.scale.set(baseScale);
+
+    const fps = isCat ? CAT_FRAMES.idle_front.fps : SPRITE_PRESETS[key].anims.idle.fps;
+    sprite.animationSpeed = fps / 60;
+    sprite.scale.set(isCat ? catScale : baseScale);
     sprite.x = cellCenterX(p.x);
     sprite.y = cellCenterY(p.y);
     sprite.play();
@@ -130,7 +178,8 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
     return {
       sprite, label, spriteKey: key,
       prevX: p.x, prevY: p.y,
-      facing: 1, lastMove: 0, anim: "idle",
+      facing: 1, direction: "down",
+      lastMove: 0, anim: isCat ? "idle_front" : "idle",
       targetX: cellCenterX(p.x), targetY: cellCenterY(p.y),
     };
   }
@@ -138,9 +187,39 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
   function applyAnim(e: Entry, name: AnimName) {
     if (e.anim === name || !allTextures) return;
     e.anim = name;
-    e.sprite.textures = allTextures[e.spriteKey][name];
-    e.sprite.animationSpeed = SPRITE_PRESETS[e.spriteKey].anims[name].fps / 60;
+    const k = e.spriteKey as Exclude<SpriteKey, "cat">;
+    e.sprite.textures = allTextures[k][name];
+    e.sprite.animationSpeed = SPRITE_PRESETS[k].anims[name].fps / 60;
     e.sprite.play();
+  }
+
+  function applyCatAnim(e: Entry, key: CatAnimKey) {
+    if (e.anim === key || !catTextures) return;
+    e.anim = key;
+    e.sprite.textures = catTextures[key];
+    e.sprite.animationSpeed = CAT_FRAMES[key].fps / 60;
+    e.sprite.play();
+  }
+
+  function resetEntryToSprite(e: Entry, key: SpriteKey) {
+    e.spriteKey = key;
+    if (key === "cat") {
+      e.anim = "idle_front";
+      e.direction = "down";
+      if (catTextures) {
+        e.sprite.textures = catTextures.idle_front;
+        e.sprite.animationSpeed = CAT_FRAMES.idle_front.fps / 60;
+        e.sprite.scale.set(catScale);
+        e.sprite.play();
+      }
+    } else if (allTextures) {
+      const k = key as Exclude<SpriteKey, "cat">;
+      e.anim = "idle";
+      e.sprite.textures = allTextures[k].idle;
+      e.sprite.animationSpeed = SPRITE_PRESETS[k].anims.idle.fps / 60;
+      e.sprite.scale.set(baseScale);
+      e.sprite.play();
+    }
   }
 
   function update(players: Record<string, Player>, currentMyId: string | null) {
@@ -166,9 +245,20 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
         entries.set(id, e);
       }
 
+      // peer เปลี่ยน sprite → re-texture entry ทันที
+      const newKey = getSpriteKey(p);
+      if (newKey !== e.spriteKey) {
+        resetEntryToSprite(e, newKey);
+      }
+
       if (p.x !== e.prevX || p.y !== e.prevY) {
         const jump = Math.abs(p.x - e.prevX) + Math.abs(p.y - e.prevY);
-        if (p.x !== e.prevX) e.facing = p.x > e.prevX ? 1 : -1;
+        if (p.x !== e.prevX) {
+          e.facing = p.x > e.prevX ? 1 : -1;
+          e.direction = p.x > e.prevX ? "right" : "left";
+        } else if (p.y !== e.prevY) {
+          e.direction = p.y > e.prevY ? "down" : "up";
+        }
         e.lastMove = now;
         e.prevX = p.x;
         e.prevY = p.y;
@@ -180,8 +270,14 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
         }
       }
 
-      applyAnim(e, now - e.lastMove < SPRITE_CONFIG.moveTimeoutMs ? "run" : "idle");
-      e.sprite.scale.x = baseScale * e.facing;
+      if (e.spriteKey === "cat") {
+        applyCatAnim(e, getCatAnimKey(e, now));
+        e.sprite.scale.set(catScale); // ไม่ flip — cat มี directional sprites ในตัว
+      } else {
+        applyAnim(e, now - e.lastMove < SPRITE_CONFIG.moveTimeoutMs ? "run" : "idle");
+        e.sprite.scale.x = baseScale * e.facing;
+      }
+
       e.sprite.x += (e.targetX - e.sprite.x) * 0.25;
       e.sprite.y += (e.targetY - e.sprite.y) * 0.25;
       e.label.x = e.sprite.x;
@@ -193,12 +289,7 @@ export function createPlayerLayer(canvas: HTMLCanvasElement, opts: PlayerLayerOp
   function setMySprite(key: SpriteKey) {
     saveMySprite(key);
     const e = entries.get(myId);
-    if (!e || !allTextures) return;
-    e.spriteKey = key;
-    e.anim = "idle"; // reset เพื่อ force applyAnim ครั้งถัดไป
-    e.sprite.textures = allTextures[key].idle;
-    e.sprite.animationSpeed = SPRITE_PRESETS[key].anims.idle.fps / 60;
-    e.sprite.play();
+    if (e) resetEntryToSprite(e, key);
   }
 
   function destroy() {

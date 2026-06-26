@@ -130,11 +130,15 @@ export function useRoom({ room: initialRoom, displayName }: UseRoomArgs) {
         }
 
         case "join":
+          // ตัวเราเองจัดการตำแหน่งแบบ local (client prediction) → ข้าม echo จาก server กัน rubber-band
+          if (env.payload.id === myIdRef.current) break;
           playersRef.current[env.payload.id] = env.payload;
           // บันทึกว่า player นี้อยู่ห้องเดียวกับเรา
           setPlayerRooms((p) => ({ ...p, [env.payload.id]: roomRef.current }));
           break;
         case "move":
+          // เช่นเดียวกับ join: ไม่เอา move echo ของตัวเองมาทับ (ตำแหน่ง local สดกว่าเสมอ)
+          if (env.payload.id === myIdRef.current) break;
           playersRef.current[env.payload.id] = env.payload;
           break;
 

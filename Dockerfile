@@ -8,8 +8,9 @@ RUN npm install --prefer-offline
 COPY . .
 
 # VITE_API_URL ต้องมีตอน build (Vite ฝังค่าลง bundle ตอน vite build ไม่ใช่ runtime)
-# Railway ส่ง service variable เข้ามาเป็น build arg ให้อัตโนมัติ → ประกาศ ARG เพื่อรับ แล้ว set เป็น ENV
-ARG VITE_API_URL
+# ใส่ default = backend domain prod ไว้เลย → ไม่ต้องพึ่ง Railway ส่ง build arg (เปราะ)
+# ยัง override ได้ผ่าน build arg ถ้าต้องการ (เช่น --build-arg VITE_API_URL=...)
+ARG VITE_API_URL=https://catice-backend-production.up.railway.app
 ENV VITE_API_URL=$VITE_API_URL
 
 # override outDir เพราะ vite.config.js ชี้ไป ../Catice2/web (สำหรับ dev embed)

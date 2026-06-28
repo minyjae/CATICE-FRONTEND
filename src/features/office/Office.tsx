@@ -54,6 +54,7 @@ export default function Office({ me, onLogout }: OfficeProps) {
   const [boardOpen, setBoardOpen] = useState(false);
   const [spritePickerOpen, setSpritePickerOpen] = useState(false);
   const [sideOpen, setSideOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<"office" | "chat" | "members">("office");
   const [users, setUsers] = useState<PublicUser[]>([]); // user ที่สมัครทั้งหมด → selector มอบหมาย task + แชตส่วนตัว
   // คลิกสมาชิก → ขอเปิดแท็บแชตส่วนตัวกับคนนั้น (n = nonce ให้เปิดซ้ำคนเดิมได้)
   const [dmRequest, setDmRequest] = useState<{ id: string; n: number } | null>(
@@ -94,7 +95,7 @@ export default function Office({ me, onLogout }: OfficeProps) {
         </button>
       </div>
 
-      <div className="content">
+      <div className={`content tab-${activeTab}`}>
         <div className="main">
           <div className="stage">
             {/* ปุ่มเปิด/ปิด sidebar */}
@@ -229,6 +230,31 @@ export default function Office({ me, onLogout }: OfficeProps) {
           onClose={() => setBoardOpen(false)}
         />
       )}
+
+      {/* bottom nav — แสดงเฉพาะ mobile ผ่าน CSS */}
+      <nav className="bottom-nav">
+        <button
+          className={"bnav-btn" + (activeTab === "office" ? " active" : "")}
+          onClick={() => setActiveTab("office")}
+        >
+          <span className="bnav-icon">🗺️</span>
+          <span className="bnav-label">ออฟฟิศ</span>
+        </button>
+        <button
+          className={"bnav-btn" + (activeTab === "chat" ? " active" : "")}
+          onClick={() => setActiveTab("chat")}
+        >
+          <span className="bnav-icon">💬</span>
+          <span className="bnav-label">แชท</span>
+        </button>
+        <button
+          className={"bnav-btn" + (activeTab === "members" ? " active" : "")}
+          onClick={() => setActiveTab("members")}
+        >
+          <span className="bnav-icon">👥</span>
+          <span className="bnav-label">ทีม</span>
+        </button>
+      </nav>
 
       <CallInvite
         incoming={incomingInvites}

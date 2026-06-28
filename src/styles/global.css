@@ -336,6 +336,36 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 14px 0 5px
 .btn-danger { background: var(--danger); color: #2a0f0d; border: 2px solid var(--border); border-radius: 7px; padding: 9px 18px; font-weight: 700; box-shadow: var(--sh-sm); }
 .btn-danger:hover { filter: brightness(1.06); }
 
+/* ===== Bottom nav (mobile only — hidden on desktop) ===== */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 40;
+  background: var(--panel);
+  border-top: 3px solid var(--border);
+  box-shadow: 0 -4px 0 var(--ink);
+}
+.bnav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 4px;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-right: 2px solid var(--border);
+  font-family: inherit;
+  cursor: pointer;
+}
+.bnav-btn:last-child { border-right: none; }
+.bnav-btn.active { color: var(--accent); background: var(--accent-dim); }
+.bnav-icon { font-size: 18px; line-height: 1; }
+.bnav-label { font-size: 10px; font-weight: 700; }
+
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--panel-2); border: 2px solid var(--border); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -361,3 +391,93 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 14px 0 5px
 }
 .setting-label:hover { background: #46371f; }
 .setting-label:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+
+/* ===== RESPONSIVE ===== */
+
+/* 1100px — small laptop / iPad landscape */
+@media (max-width: 1100px) {
+  .side { width: 260px; }
+  .topbar { gap: 10px; padding: 8px 14px; }
+  .user-chip { font-size: 12px; padding: 5px 10px; gap: 7px; }
+  .brand-title { font-size: 11px; }
+}
+
+/* 900px — เริ่ม zoom canvas + ซ่อน status chip */
+@media (max-width: 900px) {
+  .side { width: 240px; }
+  .stage-canvas { zoom: 0.88; }
+  .topbar .status-chip { display: none; }
+}
+
+/* 780px — tablet portrait: stack layout + bottom nav */
+@media (max-width: 780px) {
+  html, body, #root { height: 100dvh; }
+
+  .app {
+    height: 100dvh;
+    padding: 8px 8px 0;
+    gap: 8px;
+    padding-bottom: 58px; /* เว้นที่ bottom nav */
+  }
+
+  .topbar { gap: 8px; padding: 7px 12px; }
+  .room-badge { font-size: 11px; padding: 3px 8px; }
+  .status-chip { display: none; }
+  .user-chip { font-size: 12px; padding: 5px 9px; gap: 6px; }
+
+  .content { flex-direction: column; overflow: hidden; }
+  .main { flex: 1; min-height: 0; }
+  .side {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+  }
+  .members { max-height: none; flex: 1; }
+  .chat { flex: 1; }
+
+  .stage-canvas { zoom: 0.92; top: 0; /* reset vertical offset ให้ center ทำงานถูก */ }
+
+  /* show bottom nav */
+  .bottom-nav { display: flex; }
+
+  /* tab visibility — content.tab-X ควบคุมผ่าน JS class */
+  .content.tab-office .side { display: none; }
+  .content.tab-office .main { display: flex; }
+
+  .content.tab-chat .main { display: none; }
+  .content.tab-chat .side { display: flex; flex-direction: column; flex: 1; }
+  .content.tab-chat .members { display: none; }
+  .content.tab-chat .chat { flex: 1; min-height: 0; }
+
+  .content.tab-members .main { display: none; }
+  .content.tab-members .side { display: flex; flex-direction: column; flex: 1; }
+  .content.tab-members .members { flex: 1; max-height: none; min-height: 0; }
+  .content.tab-members .chat { display: none; }
+}
+
+/* 600px — iPhone landscape / large phone */
+@media (max-width: 600px) {
+  .app { padding: 6px 6px 0; gap: 6px; padding-bottom: 58px; }
+  .topbar { padding: 6px 10px; gap: 6px; }
+  .stage-canvas { zoom: 0.7; }
+  .brand-title { display: none; }
+  /* user chip: ซ่อน text ชื่อ-role เหลือแค่ dot */
+  .user-chip { padding: 4px 6px; }
+  .user-chip span:not(.dot) { display: none; }
+  .ghost { padding: 7px 10px; font-size: 12px; }
+  .room-badge { font-size: 10px; padding: 3px 7px; }
+  /* hint button ย่อ */
+  .hint { font-size: 10px; padding: 4px 8px; right: 8px; top: 8px; }
+  .setting-label { font-size: 11px; padding: 5px 10px; top: 8px; left: 8px; }
+}
+
+/* 430px — iPhone (Pro / Plus) */
+@media (max-width: 430px) {
+  .stage-canvas { zoom: 0.47; }
+  .topbar { padding: 5px 8px; gap: 5px; }
+}
+
+/* 375px — iPhone SE / mini */
+@media (max-width: 375px) {
+  .stage-canvas { zoom: 0.41; }
+}
